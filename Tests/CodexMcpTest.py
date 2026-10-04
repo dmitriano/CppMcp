@@ -103,6 +103,6 @@ with tempfile.TemporaryDirectory(prefix="cppmcp-codex-") as temporary:
     # JSON quoting also produces a valid TOML basic string for a Windows path.
     (stdio_home / "config.toml").write_text(
         '[mcp_servers.cppmcp]\ncommand = ' + json.dumps(str(Path(sys.argv[1]).resolve())) + '\n'
-        'args = ["stdio"]\nstartup_timeout_sec = 10\ndefault_tools_approval_mode = "auto"\n', encoding="utf-8")
+        'args = ["--run=McpServer_Example", "--output=all", "--output_stream=stderr", "--transport=stdio"]\nstartup_timeout_sec = 10\ndefault_tools_approval_mode = "auto"\n', encoding="utf-8")
     check_codex(stdio_home)
 print("Codex discovered and called echo over HTTP and stdio; no model turn was started.")

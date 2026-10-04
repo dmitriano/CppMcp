@@ -1,12 +1,14 @@
-"""Integration tests against a separately linked C++ host and actual OS pipes/TCP."""
+"""Integration tests against an AWL server example using actual OS pipes/TCP."""
 import base64
 import concurrent.futures
 import http.client
 import json
+from pathlib import Path
 import queue
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -41,9 +43,14 @@ def headers(value):
 
 
 class Host:
-    def __init__(self, mode="stdio", stop_after=0, max_bytes=1048576, read_output=True):
+    def __init__(self, mode="stdio", stop_after=0, max_bytes=1048576, read_output=True, http_port=0, extra_options=()):
         self.mode = mode
-        self.process = subprocess.Popen([EXE, mode, str(stop_after), str(max_bytes)],
+        arguments = [EXE, "--run=McpServer_Example", "--output=all", "--output_stream=stderr",
+                     "--log_level=Warning", f"--transport={mode}", f"--max_message_bytes={max_bytes}",
+                     f"--http_port={http_port}", *extra_options]
+        if stop_after:
+            arguments.append(f"--timeout={stop_after}")
+        self.process = subprocess.Popen(arguments,
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.lines = queue.Queue()
         self.ready = queue.Queue()
@@ -112,6 +119,58 @@ class Host:
         status, result = self.http_json(rpc("test/stop"))
         assert status == 200 and "result" in result, result
         self.wait()
+
+
+def host_options():
+    # Validate the shared console routing without asserting log messages.
+    for options, expected in (([], 0), (["--output_stream=stdout"], 0),
+                              (["--output_stream=stderr"], 0)):
+        process = subprocess.run([EXE, "--list", "--filter=McpServer_Example", *options],
+                                 capture_output=True, timeout=5)
+        assert process.returncode == expected, process
+        selected = process.stderr if options == ["--output_stream=stderr"] else process.stdout
+        other = process.stdout if options == ["--output_stream=stderr"] else process.stderr
+        assert b"McpServer_Example" in selected and not other, process
+    for options in (["--transport=invalid"], ["--http_port=65536"], ["--http_port=-1"],
+                    ["--transport=stdio", "--transport=both"], ["--invalid-option"],
+                    ["--log_level=invalid"], ["--run=Missing_Example"], ["--max_message_bytes=bad"]):
+        process = subprocess.run([EXE, "--output=all", "--output_stream=stderr",
+                                  *([] if any(option.startswith("--run=") for option in options)
+                                    else ["--run=McpServer_Example"]), *options], capture_output=True, timeout=5)
+        assert process.returncode != 0 and not process.stdout, process
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+    with Host("both", http_port=port, extra_options=["--unused=value"]) as host:
+        assert host.port == port
+        host.send(rpc(params={"text": "named options"}))
+        assert host.receive()["result"] == {"text": "named options"}
+        host.process.stdin.close()
+        host.stop_http()
+        assert host.lines.get(timeout=2) is None
+
+    with tempfile.TemporaryDirectory(prefix="cppmcp-attributes-") as directory:
+        attributes = Path(directory) / "attributes.json"
+        configuration = {"run": "McpServer_Example", "output": "All", "output_stream": "stderr",
+                         "transport": "stdio", "max_message_bytes": 1048576}
+        request = rpc(params={"text": "JSON attributes"})
+        for overrides in ([], ["--transport=stdio"]):
+            configuration["transport"] = "invalid" if overrides else "stdio"
+            attributes.write_text(json.dumps(configuration), encoding="utf-8")
+            process = subprocess.run([EXE, f"--json={attributes}", *overrides], input=encoded(request) + b"\n",
+                                     capture_output=True, timeout=5)
+            assert process.returncode == 0, process
+            frames = process.stdout.splitlines()
+            assert len(frames) == 1 and json.loads(frames[0])["result"] == {"text": "JSON attributes"}, process
+        configuration.pop("run")
+        configuration["filter"] = "["
+        attributes.write_text(json.dumps(configuration), encoding="utf-8")
+        process = subprocess.run([EXE, f"--json={attributes}"], capture_output=True, timeout=5)
+        assert process.returncode != 0 and not process.stdout, process
+        attributes.write_text("{bad json}", encoding="utf-8")
+        process = subprocess.run([EXE, f"--json={attributes}", "--output_stream=stderr"],
+                                 capture_output=True, timeout=5)
+        assert process.returncode != 0 and not process.stdout, process
 
 
 def stdio_real():
@@ -448,7 +507,8 @@ def legacy_http():
         host.stop_http()
 
 
-TESTS = {"StdioReal": stdio_real, "StdioFramingErrors": stdio_errors,
+TESTS = {
+    "HostOptions": host_options, "StdioReal": stdio_real, "StdioFramingErrors": stdio_errors,
          "StdioRequestCancel": stdio_request_cancel, "StdioCancelIdle": stdio_cancel_idle,
          "StdioCancelWrite": stdio_cancel_write, "StdioEofCancel": stdio_eof_cancel,
          "HttpTimeout": http_timeout, "HttpReal": http_real, "HttpSse": http_sse,

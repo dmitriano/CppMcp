@@ -4,7 +4,7 @@
 #include "Transport/HttpTransport.h"
 
 #include "BoostExtras/StopToken.h"
-#include "Awl/StdStreamLogger.h"
+#include "Awl/Testing/UnitTest.h"
 
 #include <boost/asio/bind_cancellation_slot.hpp>
 #include <boost/asio/co_spawn.hpp>
@@ -14,6 +14,7 @@
 #include <boost/asio/strand.hpp>
 #include <boost/asio/thread_pool.hpp>
 #include <boost/asio/use_awaitable.hpp>
+#include <functional>
 #include <iostream>
 #include <stop_token>
 
@@ -21,19 +22,6 @@ namespace
 {
     namespace asio = boost::asio;
     namespace json = boost::json;
-
-    template <class Character>
-    std::basic_ostream<Character>& stderrStream()
-    {
-        if constexpr (std::same_as<Character, wchar_t>)
-        {
-            return std::wcerr;
-        }
-        else
-        {
-            return std::cerr;
-        }
-    }
 
     class EchoHandler : public mcp::IHandler
     {
@@ -164,27 +152,31 @@ namespace
     };
 }
 
-// Integration helper only. The library itself never contains main().
-int main(const int argc, char* argv[])
+// Test/example entry point. The library itself never contains main().
+AWL_EXAMPLE(McpServer)
 {
     try
     {
-        const std::string mode = argc > 1 ? argv[1] : "stdio";
-        const int stop_after = argc > 2 ? std::stoi(argv[2]) : 0;
-        const std::size_t max_bytes = argc > 3 ? std::stoull(argv[3]) : 1024 * 1024;
-        const unsigned long requested_port = argc > 4 ? std::stoul(argv[4]) : 0;
-        if (requested_port > 65535)
+        AWL_ATTRIBUTE(std::string, transport, "stdio");
+        AWL_ATTRIBUTE(std::uint32_t, http_port, 0);
+        AWL_ATTRIBUTE(std::size_t, max_message_bytes, 1048576);
+        if (transport != "stdio" && transport != "http" && transport != "both")
         {
-            throw awl::GeneralException("HTTP port must be in the range 0..65535.");
+            throw awl::testing::TestException("Transport must be stdio, http or both.");
+        }
+
+        if (http_port > 65535)
+        {
+            throw awl::testing::TestException("HTTP port must be in the range 0..65535.");
         }
 
         asio::io_context io;
         const auto executor = asio::make_strand(io);
         asio::thread_pool blocking_io(2);
         std::stop_source stop_source;
+        std::stop_callback stop_callback(context.stopToken, std::bind(&std::stop_source::request_stop, stop_source));
         asio::steady_timer timer(executor);
-        std::shared_ptr<awl::ILogger> logger = std::make_shared<awl::StdStreamLogger>("TransportHost",
-            awl::StdStreamLogger::wrapStream(stderrStream<awl::Char>()), awl::LogLevel::Warning);
+        const std::shared_ptr<awl::ILogger>& logger = context.logger;
         std::shared_ptr<mcp::InputChannel> input = std::make_shared<mcp::InputChannel>(executor, 1);
         mcp::Server server(executor, input, logger->createLogger("Server"));
         server.addTool(std::make_unique<EchoTool>("echo", "Return the supplied text unchanged",
@@ -196,31 +188,31 @@ int main(const int argc, char* argv[])
         server.addHandler("test/large", std::make_unique<LargeHandler>());
         server.addHandler("test/stop", std::make_unique<StopHandler>(timer, stop_source));
         unsigned short port = 0;
-        if (mode == "stdio" || mode == "both")
+        if (transport == "stdio" || transport == "both")
         {
             std::shared_ptr<mcp::OutputChannel> output = std::make_shared<mcp::OutputChannel>(executor, 1);
-            std::unique_ptr<mcp::ITransport> transport = std::make_unique<mcp::StdioTransport>(executor,
+            std::unique_ptr<mcp::ITransport> stdio_transport = std::make_unique<mcp::StdioTransport>(executor,
                 mcp::openStdioStreams(executor, blocking_io.get_executor()), input, output,
-                logger->createLogger("Stdio"), mcp::StdioOptions{max_bytes, 64});
-            server.addTransport(std::move(transport));
+                logger->createLogger("Stdio"), mcp::StdioOptions{max_message_bytes, 64});
+            server.addTransport(std::move(stdio_transport));
         }
 
-        if (mode == "http" || mode == "both")
+        if (transport == "http" || transport == "both")
         {
             std::shared_ptr<mcp::OutputChannel> output = std::make_shared<mcp::OutputChannel>(executor, 1);
             mcp::HttpOptions options;
-            options.endpoint.port(static_cast<unsigned short>(requested_port));
-            options.maxBodyBytes = max_bytes;
+            options.endpoint.port(static_cast<unsigned short>(http_port));
+            options.maxBodyBytes = max_message_bytes;
             options.allowedOrigins = {"http://allowed.example"};
             options.readTimeout = std::chrono::milliseconds(500);
             options.requestTimeout = std::chrono::milliseconds(3000);
-            std::unique_ptr<mcp::HttpTransport> transport = std::make_unique<mcp::HttpTransport>(
+            std::unique_ptr<mcp::HttpTransport> http_transport = std::make_unique<mcp::HttpTransport>(
                 executor, input, output, logger->createLogger("Http"), std::move(options));
-            port = transport->localEndpoint().port();
-            server.addTransport(std::move(transport));
+            port = http_transport->localEndpoint().port();
+            server.addTransport(std::move(http_transport));
         }
 
-        int result = 0;
+        std::exception_ptr failure;
         asio::post(executor, [&]
         {
             std::shared_ptr<awl::StopToken> cancellation = std::make_shared<awl::StopToken>(executor, stop_source.get_token());
@@ -229,31 +221,22 @@ int main(const int argc, char* argv[])
                 {
                     if (error && !stop_source.stop_requested())
                     {
-                        result = 1;
+                        failure = error;
                     }
 
                     timer.cancel();
                 }));
             std::cerr << "READY " << port << std::endl;
-            if (stop_after != 0)
-            {
-                timer.expires_after(std::chrono::milliseconds(stop_after));
-                timer.async_wait([&](const boost::system::error_code error)
-                {
-                    if (!error)
-                    {
-                        stop_source.request_stop();
-                    }
-                });
-            }
         });
         io.run();
         blocking_io.join();
-        return result;
+        if (failure)
+        {
+            std::rethrow_exception(failure);
+        }
     }
     catch (const std::exception& error)
     {
-        std::cerr << error.what() << std::endl;
-        return 1;
+        throw awl::testing::TestException(error.what());
     }
 }

@@ -1,7 +1,7 @@
 project(CppMcpTest LANGUAGES CXX)
 
 add_executable(${PROJECT_NAME} TestTransports.h TestTransports.cpp CancellationProbe.h
-    TransportTest.cpp ServerTest.cpp TypedToolTest.cpp DurationTest.cpp JsonSchemaTest.cpp JsonSchemaTestData.h
+    TransportTest.cpp ServerTest.cpp McpServerExample.cpp TypedToolTest.cpp DurationTest.cpp JsonSchemaTest.cpp JsonSchemaTestData.h
     "${AWL_ROOT_DIR}/Main/main.cpp")
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(${PROJECT_NAME} PRIVATE CppMcp::CppMcp)
@@ -20,13 +20,11 @@ foreach(test_name TransportFullDuplex TransportCancelIdle TransportCancelBlocked
         TIMEOUT 15)
 endforeach()
 
-add_executable(CppMcpTransportHost TransportHost.cpp)
-target_link_libraries(CppMcpTransportHost PRIVATE CppMcp::CppMcp)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-foreach(test_name StdioReal StdioFramingErrors StdioRequestCancel StdioCancelIdle StdioCancelWrite StdioEofCancel
+foreach(test_name HostOptions StdioReal StdioFramingErrors StdioRequestCancel StdioCancelIdle StdioCancelWrite StdioEofCancel
     ToolReal LegacyStdio LegacyHttp HttpTimeout HttpReal HttpSse HttpErrors HttpDisconnect CombinedTransports)
     add_test(NAME ${test_name} COMMAND Python3::Interpreter
-        "${CMAKE_CURRENT_SOURCE_DIR}/RealTransportTest.py" "$<TARGET_FILE:CppMcpTransportHost>" ${test_name})
+        "${CMAKE_CURRENT_SOURCE_DIR}/RealTransportTest.py" "$<TARGET_FILE:${PROJECT_NAME}>" ${test_name})
     set_tests_properties(${test_name} PROPERTIES TIMEOUT 15)
 endforeach()
 
@@ -35,6 +33,6 @@ option(CPPMCP_TEST_CODEX "Run the interoperability test with the installed Codex
 if(CPPMCP_TEST_CODEX)
     find_program(CODEX_EXECUTABLE NAMES codex REQUIRED)
     add_test(NAME CodexMcpInterop COMMAND Python3::Interpreter
-        "${CMAKE_CURRENT_SOURCE_DIR}/CodexMcpTest.py" "$<TARGET_FILE:CppMcpTransportHost>" "${CODEX_EXECUTABLE}")
+        "${CMAKE_CURRENT_SOURCE_DIR}/CodexMcpTest.py" "$<TARGET_FILE:${PROJECT_NAME}>" "${CODEX_EXECUTABLE}")
     set_tests_properties(CodexMcpInterop PROPERTIES TIMEOUT 60)
 endif()

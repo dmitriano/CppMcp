@@ -130,29 +130,54 @@ and returning both structured `{ "text": "..." }` and a text block with its JSON
 Its input and output schemas come from AWL reflection. Invalid inputs return a
 tool error. The existing `test/echo` handler remains a separate test RPC method.
 
-The host arguments are mode, shutdown timer in milliseconds, message/body byte
-limit, and HTTP port. Port 0 (the default) chooses a free port. To reuse an existing
-Codex connection to `http://127.0.0.1:52034/mcp`, launch in PowerShell:
+The host is `AWL_EXAMPLE(McpServer)` in `Tests/McpServerExample.cpp`, compiled
+into `CppMcpTest`; it has no separate executable or main. Host parameters use AWL
+attributes (`--name=value`, also available through AWL's `--json` provider):
+
+- `transport`: `stdio` (default), `http` or `both`.
+- `http_port`: 0 (default) selects a free port; specify a fixed port for a stable URL.
+- `max_message_bytes`: maximum stdio frame / HTTP body size, default 1048576.
+- `timeout`: common AWL cancellation timeout in milliseconds; omitted by default.
+
+`--output_stream=stderr` selects the AWL console sink, including startup errors,
+unused-option warnings and `--list`. Its default is `stdout` for ordinary tests.
+`--output=all|failed|null` independently controls the logging mode; use `all` for
+live example diagnostics. The example uses `context.logger` and bridges
+`context.stopToken` to server cancellation. Stdout is reserved for MCP messages
+when stdio is enabled; always supply `--output_stream=stderr` for that mode.
+
+To reuse an existing Codex connection to `http://127.0.0.1:52034/mcp`, launch in
+PowerShell:
 
 ```powershell
-& C:/dev/build/cppmcp/Tests/RelWithDebInfo/CppMcpTransportHost.exe both 0 1048576 52034
+& C:/dev/build/cppmcp/Tests/RelWithDebInfo/CppMcpTest.exe `
+    --run=McpServer_Example --output=all --output_stream=stderr `
+    --transport=both --http_port=52034
 ```
 
-The process prints `READY 52034` to stderr. Restart the Codex extension after
-starting the host so it discovers the `echo` tool. With stdio, configure Codex to
-launch the executable with `args = ["stdio"]` instead of starting it manually.
+The process prints `READY 52034` to stderr. The readiness marker always uses
+stderr regardless of the selected console sink. HTTP read/request timeouts in
+this test example remain 500/3000 ms. Restart the Codex extension after starting
+the host so it discovers the `echo` tool. For stdio, configure Codex to launch
+`CppMcpTest.exe` with these arguments instead of starting it manually:
+
+```toml
+args = ["--run=McpServer_Example", "--output=all", "--output_stream=stderr", "--transport=stdio"]
+```
+
 Actual initialization, discovery and tool calls were verified through the MCP
 client in Codex 0.160.0 using the `2025-06-18` dialect over HTTP and stdio.
 
 ## Tests
 
-`Tests/RealTransportTest.py` launches `CppMcpTransportHost`, linked against the
-library, and exercises actual OS pipes and loopback TCP: UTF-8/framing, JSON/SSE,
+`Tests/RealTransportTest.py` launches `CppMcpTest --run=McpServer_Example`,
+linked against the library, and exercises actual OS pipes and loopback TCP: UTF-8/framing, JSON/SSE,
 notifications, discovery, header/error handling, body limits, concurrent routes,
 EOF and explicit cancellation, unread stdout, client disconnect, deadlines and
 combined stdio/HTTP shutdown. Python 3 is required when `BUILD_TESTING=ON`.
-The regular set has 43 CTest cases: 28 unit tests and 15 integration scenarios,
-including modern and legacy tool listing/calls and initialization failures.
+The regular set has 44 CTest cases: 28 unit tests and 16 integration scenarios,
+including named host options, console routing, modern and legacy tool
+listing/calls and initialization failures.
 An optional `CodexMcpInterop` test runs the installed Codex app-server with isolated
 temporary configuration/state. It lists and calls `echo` over HTTP and stdio,
 without starting a model turn or changing the user's Codex configuration. Enable

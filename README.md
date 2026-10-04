@@ -119,7 +119,17 @@ Tests use `context.logger` as their root.
 an output channel. Both support cancellation through `awl::StopToken`, including
 per-request cancellation and joined shutdown. Native stdio implementations live
 in `Platform/Windows` and `Platform/Posix`, selected by CMake.
-See [RealTransports.md](doc/RealTransports.md) for setup, cancellation, limits and tests.
+The host runs as `McpServer_Example` inside `CppMcpTest`, using named AWL
+attributes. For stdio, select `--output_stream=stderr` so the AWL console leaves
+stdout for protocol messages:
+
+```powershell
+& C:/dev/build/cppmcp/Tests/RelWithDebInfo/CppMcpTest.exe `
+    --run=McpServer_Example --output=all --output_stream=stderr `
+    --transport=both --http_port=52034
+```
+
+See [RealTransports.md](doc/RealTransports.md) for parameters, cancellation, limits and tests.
 
 ## Server handlers, tools and resources
 
