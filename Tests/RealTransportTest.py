@@ -207,7 +207,8 @@ def stdio_errors():
         with Host(max_bytes=128) as host:
             host.process.stdin.write(data)
             host.process.stdin.close()
-            host.wait(expected=1)
+            # AWL reports the original transport exception as a runtime error.
+            host.wait(expected=2)
 
 
 def stdio_request_cancel():
