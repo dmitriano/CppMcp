@@ -8,6 +8,8 @@ AWL is a submodule in `lib/Awl`, pinned to the same revision as the reference
 `tradeclient` project. Boost and OpenSSL are discovered by AWL's CMake scripts,
 with the static runtime and static Boost libraries used by `tradeclient`.
 
+Reference development guidelines: [AGENTS.md](../tradeclient/AGENTS.md) in the `tradeclient` project.
+
 ## Windows build
 
 Initialize the bundled AWL checkout:
