@@ -1,3 +1,4 @@
 /build/
 /.vs/
 /CMakeUserPresets.json
+__pycache__/
