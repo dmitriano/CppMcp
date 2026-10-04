@@ -1,11 +1,10 @@
 project(CppMcpTest LANGUAGES CXX)
 
 add_executable(${PROJECT_NAME} TestTransports.h TestTransports.cpp CancellationProbe.h
-    TransportTest.cpp ServerTest.cpp McpServerExample.cpp TypedToolTest.cpp DurationTest.cpp JsonSchemaTest.cpp JsonSchemaTestData.h
-    "${AWL_ROOT_DIR}/Main/main.cpp")
+    TransportTest.cpp ServerTest.cpp McpServerExample.cpp TypedToolTest.cpp DurationTest.cpp JsonSchemaTest.cpp JsonSchemaTestData.h)
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
-target_link_libraries(${PROJECT_NAME} PRIVATE CppMcp::CppMcp)
-include("${AWL_ROOT_DIR}/CMake/AwlCompilerOptions.cmake")
+target_link_libraries(${PROJECT_NAME} PRIVATE CppMcp::CppMcp AWL::TestMain)
+awl_apply_compiler_options(${PROJECT_NAME})
 
 foreach(test_name TransportFullDuplex TransportCancelIdle TransportCancelBlockedSend
     ServerRegistration ServerFullDuplex ServerErrors ServerCancelHandler ServerCancelTool

@@ -6,7 +6,7 @@ set(AWL_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/Awl"
     CACHE PATH "Path to AWL root directory")
 
 if(NOT EXISTS "${AWL_ROOT_DIR}/CMake/AwlConfig.cmake"
-    OR NOT EXISTS "${AWL_ROOT_DIR}/CMake/AwlLink.cmake")
+    OR NOT EXISTS "${AWL_ROOT_DIR}/CMake/AwlTargets.cmake")
     message(FATAL_ERROR
         "AWL not found in '${AWL_ROOT_DIR}'. Run git submodule update --init --recursive "
         "or set -DAWL_ROOT_DIR=<path to AWL>.")
@@ -22,6 +22,8 @@ set(AWL_ANSI_CMD_CHAR ON)
 set(AWL_BIGOBJ ON)
 
 include("${AWL_ROOT_DIR}/CMake/AwlConfig.cmake")
+include("${AWL_ROOT_DIR}/CMake/AwlTargets.cmake")
+awl_add_libraries()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -59,29 +61,9 @@ add_library(CppMcp::CppMcp ALIAS ${PROJECT_NAME})
 add_library(CppMcpCore ALIAS ${PROJECT_NAME})
 add_library(CppMcpTransport ALIAS ${PROJECT_NAME})
 
-target_include_directories(${PROJECT_NAME} PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
-    "${AWL_ROOT_DIR}"
-    "${AWL_ROOT_DIR}/Extras/Boost")
+target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
-# AWL compiles Boost.JSON's implementation in BoostExtras/Json/Json.cpp.
-target_compile_definitions(${PROJECT_NAME} PUBLIC BOOST_JSON_NO_LIB AWL_BOOST AWL_ANSI_CMD_CHAR)
 include("${AWL_ROOT_DIR}/CMake/AwlLink.cmake")
-
-if(DEFINED AWL_PLATFORM_DIR)
-    target_include_directories(${PROJECT_NAME} PUBLIC "${AWL_PLATFORM_DIR}")
-endif()
-
-# AWL's Exception::message() must use the same awl::String type in consumers.
-if(MSVC)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC _UNICODE)
-endif()
-
-target_link_libraries(${PROJECT_NAME} PUBLIC Boost::headers)
-if(WIN32)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC _WIN32_WINNT=0x0A00 NOMINMAX)
-    target_link_libraries(${PROJECT_NAME} PUBLIC ws2_32)
-endif()
 
 option(BUILD_TESTING "Build CppMcp tests" ${PROJECT_IS_TOP_LEVEL})
 include(CTest)
