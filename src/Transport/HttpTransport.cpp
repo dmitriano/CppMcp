@@ -489,7 +489,7 @@ namespace mcp
         std::shared_ptr<InputChannel> input;
         std::shared_ptr<OutputChannel> output;
         HttpOptions settings;
-        Channel<void(boost::system::error_code, OutgoingMessage)> responses;
+        awl::Channel<void(boost::system::error_code, OutgoingMessage)> responses;
         std::stop_source source;
         asio::cancellation_signal cancellation;
     };

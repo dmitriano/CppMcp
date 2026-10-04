@@ -53,7 +53,7 @@ namespace mcp
         std::shared_ptr<OutputChannel> _outputChannel;
         const std::shared_ptr<awl::ILogger> _logger;
         StdioOptions _options;
-        Channel<void(boost::system::error_code, bool)> _drained;
+        awl::Channel<void(boost::system::error_code, bool)> _drained;
         std::map<std::string, std::stop_source> _requests;
         std::set<std::string> _initializeRequests;
         std::string _protocolVersion;

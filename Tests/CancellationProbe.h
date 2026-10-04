@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common/Channel.h"
+#include "BoostExtras/Channel.h"
 
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/steady_timer.hpp>
@@ -9,7 +9,7 @@
 
 namespace mcp::testing
 {
-    using SignalChannel = Channel<void(boost::system::error_code, bool)>;
+    using SignalChannel = awl::Channel<void(boost::system::error_code, bool)>;
 
     class CancellationProbe
     {

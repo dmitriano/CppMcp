@@ -86,7 +86,8 @@ Transports are ordinary objects; there is no static factory registration.
 The application handler reads a shared `InputChannel` and sends replies to the
 originating transport's `OutputChannel`, carried by each incoming message.
 `routeId` identifies a destination within that output channel, independently of
-the JSON-RPC ID. All queues use `mcp::Channel`, an Asio `concurrent_channel` alias.
+the JSON-RPC ID. All queues use `awl::Channel` from `BoostExtras/Channel.h`, an Asio
+`concurrent_channel` alias shared through AWL.
 
 Call `asyncRun()` once after adding transports. The server uses a caller-supplied
 strand executor and runs all transports concurrently. Cancellation or a child

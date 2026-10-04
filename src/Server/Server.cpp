@@ -268,7 +268,7 @@ namespace mcp
             std::exception_ptr error;
             bool cancelled;
         };
-        using CompletionChannel = Channel<void(boost::system::error_code, Completion)>;
+        using CompletionChannel = awl::Channel<void(boost::system::error_code, Completion)>;
         std::shared_ptr<CompletionChannel> completions = std::make_shared<CompletionChannel>(
             _executor, _options.maxConcurrentRequests);
         std::map<std::uint64_t, std::shared_ptr<Job>> jobs;

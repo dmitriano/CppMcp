@@ -16,8 +16,8 @@ namespace mcp::testing
         std::string body;
     };
 
-    using ClientRequestChannel = Channel<void(boost::system::error_code, ClientMessage)>;
-    using ClientResponseChannel = Channel<void(boost::system::error_code, OutgoingMessage)>;
+    using ClientRequestChannel = awl::Channel<void(boost::system::error_code, ClientMessage)>;
+    using ClientResponseChannel = awl::Channel<void(boost::system::error_code, OutgoingMessage)>;
 
     class TestTransport : public ITransport
     {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common/Channel.h"
+#include "BoostExtras/Channel.h"
 
 #include <boost/system/error_code.hpp>
 #include <cstdint>
@@ -28,7 +28,7 @@ namespace mcp
     };
 
     // Directions are named from the application's handler perspective.
-    using OutputChannel = Channel<void(boost::system::error_code, OutgoingMessage)>;
+    using OutputChannel = awl::Channel<void(boost::system::error_code, OutgoingMessage)>;
 
     struct IncomingMessage
     {
@@ -42,5 +42,5 @@ namespace mcp
         std::string protocolVersion;
     };
 
-    using InputChannel = Channel<void(boost::system::error_code, IncomingMessage)>;
+    using InputChannel = awl::Channel<void(boost::system::error_code, IncomingMessage)>;
 }
