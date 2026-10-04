@@ -25,7 +25,7 @@ include("${AWL_ROOT_DIR}/CMake/AwlConfig.cmake")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_executable(${PROJECT_NAME} src/Main.cpp)
+add_executable(${PROJECT_NAME} src/Main.cpp src/Common/Channel.h)
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 # AWL compiles Boost.JSON's implementation in BoostExtras/Json/Json.cpp.
 target_compile_definitions(${PROJECT_NAME} PRIVATE BOOST_JSON_NO_LIB)
