@@ -2,6 +2,7 @@
 #include "Server/RpcError.h"
 
 #include "BoostExtras/StopToken.h"
+#include "Awl/StringFormat.h"
 
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/bind_cancellation_slot.hpp>
@@ -659,21 +660,28 @@ namespace mcp
 
                 _logger->error("Tool {} failed: {}", name, error.what());
                 result.isError = true;
+                result.content.push_back(json::object{{"type", "text"},
+                    {"text", std::format("Tool '{}' failed: {}", name, error.what())}});
             }
             catch (const awl::Exception& error)
             {
                 _logger->error(_T("Tool {} failed: {}"), awl::fromAString(name), error.message());
                 result.isError = true;
+                result.content.push_back(json::object{{"type", "text"},
+                    {"text", std::format("Tool '{}' failed: {}", name, error.message())}});
             }
             catch (const std::exception& error)
             {
                 _logger->error("Tool {} failed: {}", name, error.what());
                 result.isError = true;
+                result.content.push_back(json::object{{"type", "text"},
+                    {"text", std::format("Tool '{}' failed: {}", name, error.what())}});
             }
 
             if (result.isError && result.content.empty())
             {
-                result.content.push_back(json::object{{"type", "text"}, {"text", "Tool execution failed"}});
+                result.content.push_back(json::object{{"type", "text"},
+                    {"text", std::format("Tool '{}' failed without a diagnostic message.", name)}});
             }
 
             json::object serialized{{"content", std::move(result.content)}, {"isError", result.isError}};

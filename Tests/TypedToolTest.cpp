@@ -13,6 +13,7 @@
 #include <boost/asio/strand.hpp>
 #include <chrono>
 #include <exception>
+#include <format>
 #include <limits>
 #include <memory>
 #include <thread>
@@ -454,7 +455,9 @@ namespace
             const json::object result = co_await asyncCall(peer, 7, name, {});
             AWL_ASSERT(result.at("isError") == true);
             AWL_ASSERT_FALSE(result.contains("structuredContent"));
-            AWL_ASSERT(result.at("content").as_array()[0].as_object().at("text") == "Tool execution failed");
+            const std::string text(result.at("content").as_array()[0].as_object().at("text").as_string());
+            AWL_ASSERT(text.starts_with(std::format("Tool '{}' failed: ", name)));
+            AWL_ASSERT(text.find(name == "fail" ? "Private typed tool details" : "$.value") != std::string::npos);
         }
 
         const json::object recovery = co_await asyncCall(peer, 7, "sum", json::object{{"a", 2}, {"b", 2}});

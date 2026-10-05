@@ -8,6 +8,7 @@
 #include "Awl/ILogger.h"
 
 #include <concepts>
+#include <format>
 #include <utility>
 
 namespace mcp
@@ -44,7 +45,7 @@ namespace mcp
             catch (const awl::JsonException& error)
             {
                 _logger->warning(_T("Invalid tool arguments: {}"), error.message());
-                input_error = error.what();
+                input_error = std::format("Invalid arguments for tool '{}': {}", _definition.name, error.what());
             }
 
             if (input_error)

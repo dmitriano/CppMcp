@@ -14,7 +14,9 @@
 #include <boost/asio/use_awaitable.hpp>
 #include <chrono>
 #include <exception>
+#include <format>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 
@@ -105,7 +107,10 @@ namespace
         {
             if (_fail)
             {
-                throw awl::GeneralException("Private tool details");
+                if (arguments.if_contains("empty_error")) co_return ToolResult{{}, std::nullopt, true};
+                if (arguments.if_contains("standard_error")) throw std::invalid_argument("Invalid order list_id 123");
+                if (arguments.if_contains("system_error")) throw boost::system::system_error(asio::error::connection_reset);
+                throw awl::GeneralException(L"Tool diagnostic: ?????? SQLite");
             }
 
             const json::value* text = arguments.if_contains("text");
@@ -454,7 +459,24 @@ namespace
             const json::object& result = call.at("result").as_object();
             AWL_ASSERT(result.at("isError") == true);
             AWL_ASSERT_FALSE(result.at("content").as_array().empty());
-            AWL_ASSERT(json::serialize(call).find("Private") == std::string::npos);
+            const std::string text(result.at("content").as_array()[0].as_object().at("text").as_string());
+            AWL_ASSERT(text == (name == "fail" ? "Tool 'fail' failed: Tool diagnostic: ?????? SQLite" : "text must be a string"));
+        }
+
+        for (const std::string field : {"standard_error", "system_error", "empty_error"})
+        {
+            const json::object call = co_await asyncCall(peer, 9, "tools/call", json::object{
+                {"name", "fail"}, {"arguments", json::object{{field, true}}}});
+            const auto& result = call.at("result").as_object();
+            AWL_ASSERT(result.at("isError") == true);
+            const std::string text(result.at("content").as_array()[0].as_object().at("text").as_string());
+            if (field == "empty_error") AWL_ASSERT(text == "Tool 'fail' failed without a diagnostic message.");
+            else
+            {
+                const std::string reason = field == "standard_error" ? "Invalid order list_id 123" :
+                    boost::system::system_error(asio::error::connection_reset).what();
+                AWL_ASSERT(text == std::format("Tool 'fail' failed: {}", reason));
+            }
         }
 
         // Even failing and unknown notifications must not produce RPC errors.
