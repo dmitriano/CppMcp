@@ -419,9 +419,6 @@ namespace mcp
                 params = supplied_params->as_object();
             }
 
-            _logger->trace("Request parameters: method={}, route={}, id={}, params={}",
-                std::string_view(method->as_string()), message.routeId, request_id, params);
-
             json::object meta;
             if (const json::value* supplied_meta = params.if_contains("_meta"))
             {
@@ -646,8 +643,7 @@ namespace mcp
             }
 
             ToolResult result;
-            _logger->debug("Calling tool: {}", name);
-            _logger->trace("Tool arguments: name={}, arguments={}", name, arguments);
+            _logger->debug("Calling tool: {}, arguments={}", name, arguments);
             try
             {
                 result = co_await found->second.handler->asyncCall(std::move(arguments), std::move(context));
