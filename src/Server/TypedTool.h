@@ -24,7 +24,14 @@ namespace mcp
 
         // Logger is non-null; supply a child logger for this tool at the call site.
         TypedTool(std::string name, std::string description, const std::shared_ptr<awl::ILogger>& logger) :
-            _definition{std::move(name), std::move(description), awl::makeJsonSchema<Input>(), awl::makeJsonSchema<Output>()},
+            TypedTool(std::move(name), std::move(description), awl::makeJsonSchema<Input>(), logger)
+        {}
+
+        // Advertise a refined input schema; runtime validation still uses Input.
+        // The executor must validate any opaque JSON fields described by this schema.
+        TypedTool(std::string name, std::string description, boost::json::object input_schema,
+            const std::shared_ptr<awl::ILogger>& logger) :
+            _definition{std::move(name), std::move(description), std::move(input_schema), awl::makeJsonSchema<Output>()},
             _logger(logger)
         {}
 

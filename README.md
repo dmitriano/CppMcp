@@ -273,6 +273,9 @@ objects are unrestricted. Transparent wrappers retain the underlying type rules.
 `awl::makeJsonSchema<T>()` and `awl::validateJson<T>()` in AWL's
 `BoostExtras/Json/JsonSchema.h` share these type rules. This validates
 the supported C++ shapes, not arbitrary user-provided JSON Schema documents.
+TypedTool also accepts an explicitly supplied input schema for describing opaque
+JSON fields. Runtime envelope validation still uses its Input type; the executor
+must validate opaque values against their actual types before performing actions.
 Arithmetic fields must be JSON numbers within the C++ type's range; numeric
 string coercion is rejected. Decimal and duration fields use their string
 serializers for syntax, range and precision checks. Time points check target
