@@ -260,7 +260,7 @@ multimaps can only serialize distinct keys, with duplicate output keys rejected.
 
 A custom `awl::JsonSerializer<T>` is accepted too: by default its schema is `{}`
 and validation calls its `fromJson` on a temporary value. Specialize
-`mcp::JsonSchemaTraits<T>` with a static `schema()` returning a JSON object to
+`awl::JsonSchemaTraits<T>` with a static `schema()` returning a JSON object to
 provide its actual shape. An optional static `validate(const boost::json::value&)`
 can replace deserialization-based validation, including for types without a default
 constructor; report errors with `awl::JsonException`. Arbitrary custom schemas are
@@ -270,8 +270,8 @@ Every non-optional field is required, even if its C++ declaration has a default.
 Optional fields may be absent or `null`; AWL serializes an empty optional as `null`.
 Unknown fields are rejected in reflected objects; map keys and opaque JSON
 objects are unrestricted. Transparent wrappers retain the underlying type rules.
-`makeJsonSchema<T>()` and
-`validateJson<T>()` in `Common/JsonSchema.h` share these type rules. This validates
+`awl::makeJsonSchema<T>()` and `awl::validateJson<T>()` in AWL's
+`BoostExtras/Json/JsonSchema.h` share these type rules. This validates
 the supported C++ shapes, not arbitrary user-provided JSON Schema documents.
 Arithmetic fields must be JSON numbers within the C++ type's range; numeric
 string coercion is rejected. Decimal and duration fields use their string

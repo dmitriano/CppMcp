@@ -32,6 +32,8 @@ namespace
     using namespace asio::experimental::awaitable_operators;
     using namespace mcp;
     using namespace mcp::testing;
+    using awl::makeJsonSchema;
+    using awl::validateJson;
 
     struct SumInput
     {
