@@ -418,6 +418,10 @@ namespace mcp
                 params = supplied_params->as_object();
             }
 
+            if (_logger->enabled(awl::LogLevel::Trace))
+                _logger->trace("Request parameters: method={}, route={}, id={}, params={}",
+                    std::string_view(method->as_string()), message.routeId, json::serialize(request_id), json::serialize(params));
+
             json::object meta;
             if (const json::value* supplied_meta = params.if_contains("_meta"))
             {
@@ -643,6 +647,8 @@ namespace mcp
 
             ToolResult result;
             _logger->debug("Calling tool: {}", name);
+            if (_logger->enabled(awl::LogLevel::Trace))
+                _logger->trace("Tool arguments: name={}, arguments={}", name, json::serialize(arguments));
             try
             {
                 result = co_await found->second.handler->asyncCall(std::move(arguments), std::move(context));
