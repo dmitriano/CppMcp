@@ -9,7 +9,7 @@ awl_apply_compiler_options(${PROJECT_NAME})
 foreach(test_name TransportFullDuplex TransportCancelIdle TransportCancelBlockedSend
     ServerRegistration ServerFullDuplex ServerErrors ServerCancelHandler ServerCancelTool
     ServerCancelOutput ServerOutputFailure ServerEmptyRegistries TypedToolSchema TypedToolValidation
-    TypedToolAllTypes TypedToolFullDuplex TypedToolInputErrors TypedToolOutputErrors TypedToolCancel
+    TypedToolAllTypes TypedToolCustomOutputSchema TypedToolFullDuplex TypedToolInputErrors TypedToolOutputErrors TypedToolCancel
     DurationFormatting DurationParsing DurationErrors JsonDuration
     JsonSchemaAllTypes JsonSchemaShapes JsonSchemaValidation JsonSchemaWrappers JsonSchemaUnicode JsonSchemaCustomSerializer)
     add_test(NAME ${test_name}

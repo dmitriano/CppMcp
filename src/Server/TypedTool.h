@@ -31,7 +31,14 @@ namespace mcp
         // The executor must validate any opaque JSON fields described by this schema.
         TypedTool(std::string name, std::string description, boost::json::object input_schema,
             const std::shared_ptr<awl::ILogger>& logger) :
-            _definition{std::move(name), std::move(description), std::move(input_schema), awl::makeJsonSchema<Output>()},
+            TypedTool(std::move(name), std::move(description), std::move(input_schema), awl::makeJsonSchema<Output>(), logger)
+        {}
+
+        // Refined schemas describe opaque JSON fields; runtime validation uses Input/Output.
+        // The implementation must ensure opaque values conform to the advertised schemas.
+        TypedTool(std::string name, std::string description, boost::json::object input_schema,
+            boost::json::object output_schema, const std::shared_ptr<awl::ILogger>& logger) :
+            _definition{std::move(name), std::move(description), std::move(input_schema), std::move(output_schema)},
             _logger(logger)
         {}
 
