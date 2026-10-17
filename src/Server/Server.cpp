@@ -29,7 +29,7 @@ namespace mcp
         {
             return method == "initialize" || method == "notifications/initialized" || method == "ping"
                 || method == "server/discover" || method == "tools/list" || method == "tools/call"
-                || method == "resources/list" || method == "resources/read";
+                || method == "resources/list" || method == "resources/templates/list" || method == "resources/read";
         }
 
         std::string requiredString(const json::object& params, const std::string_view key)
@@ -605,7 +605,7 @@ namespace mcp
                     json::object{{"name", _options.name}, {"version", _options.version}}}}}};
         }
 
-        if (method == "tools/list" || method == "resources/list")
+        if (method == "tools/list" || method == "resources/list" || method == "resources/templates/list")
         {
             // Pagination is not implemented; never silently ignore a cursor.
             if (params.contains("cursor"))
@@ -614,6 +614,19 @@ namespace mcp
             }
 
             json::array items;
+
+            if (method == "resources/templates/list")
+            {
+                // Resource templates are not registered yet; report an empty catalog.
+                json::object result{{"resourceTemplates", std::move(items)}};
+
+                if (!legacy)
+                {
+                    result["resultType"] = "complete";
+                }
+
+                co_return result;
+            }
 
             if (method == "tools/list")
             {

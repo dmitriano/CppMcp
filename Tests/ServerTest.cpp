@@ -458,6 +458,7 @@ namespace
             json::object{{"name", "echo"}, {"arguments", json::array{1}}}), -32602);
         co_await asyncCheckError(peer, makeRequest("tools/list", json::object{{"_meta", "bad"}}), -32602);
         co_await asyncCheckError(peer, makeRequest("tools/list", json::object{{"cursor", "next"}}), -32602);
+        co_await asyncCheckError(peer, makeRequest("resources/templates/list", json::object{{"cursor", "next"}}), -32602);
         co_await asyncCheckError(peer, makeRequest("resources/read", json::object{{"uri", 123}}), -32602);
         co_await asyncCheckError(peer, makeRequest("test/fail"), -32603);
         const json::object invalid = co_await asyncCall(peer, 9, "test/invalid");
@@ -563,6 +564,12 @@ namespace
 
     asio::awaitable<void> asyncCheckEmpty(Fixture& fixture)
     {
+        const json::object templates = co_await asyncCall(fixture.stdio, 0, "resources/templates/list");
+        const auto& template_result = templates.at("result").as_object();
+        AWL_ASSERT(template_result.at("resourceTemplates").as_array().empty());
+        AWL_ASSERT(template_result.at("resultType") == "complete");
+        AWL_ASSERT_FALSE(template_result.contains("nextCursor"));
+
         for (const bool tools : {true, false})
         {
             const json::object reply = co_await asyncCall(fixture.stdio, 0, tools ? "tools/list" : "resources/list");
@@ -641,7 +648,7 @@ AWL_TEST(ServerRegistration)
     fixture.registerHandlers();
 
     for (const std::string method : {"test/echo", "", "initialize", "notifications/initialized", "ping",
-        "server/discover", "tools/list", "tools/call", "resources/list", "resources/read", "rpc.reserved"})
+        "server/discover", "tools/list", "tools/call", "resources/list", "resources/templates/list", "resources/read", "rpc.reserved"})
     {
         assertAwlException([&]
         {

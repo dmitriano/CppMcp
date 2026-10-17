@@ -3,6 +3,8 @@
 C++23 MCP framework library using AWL, Boost.Asio and Boost.Beast, without Qt.
 The static library `CppMcp` provides transport orchestration and a JSON-RPC dispatcher
 with handlers, tools and resources, real stdio and Streamable HTTP transports.
+`resources/templates/list` returns an empty `resourceTemplates` array until
+resource template registration is implemented.
 
 AWL is a submodule in `lib/Awl`; an external shared checkout can be selected with
 `AWL_ROOT_DIR`. It must provide AWL's library-target API and the duration/JSON
