@@ -107,13 +107,26 @@ namespace
         {
             if (_fail)
             {
-                if (arguments.if_contains("empty_error")) co_return ToolResult{{}, std::nullopt, true};
-                if (arguments.if_contains("standard_error")) throw std::invalid_argument("Invalid order list_id 123");
-                if (arguments.if_contains("system_error")) throw boost::system::system_error(asio::error::connection_reset);
+                if (arguments.if_contains("empty_error"))
+                {
+                    co_return ToolResult{{}, std::nullopt, true};
+                }
+
+                if (arguments.if_contains("standard_error"))
+                {
+                    throw std::invalid_argument("Invalid order list_id 123");
+                }
+
+                if (arguments.if_contains("system_error"))
+                {
+                    throw boost::system::system_error(asio::error::connection_reset);
+                }
+
                 throw awl::GeneralException(L"Tool diagnostic: ?????? SQLite");
             }
 
             const json::value* text = arguments.if_contains("text");
+
             if (!text || !text->is_string())
             {
                 co_return ToolResult{json::array{
@@ -145,6 +158,7 @@ namespace
         asio::awaitable<std::vector<ResourceContents>> asyncRead(RequestContext) override
         {
             ResourceContents item{_definition.uri, _definition.mimeType, TextResource{"hello"}};
+
             if (_binary)
             {
                 item.contents = BlobResource{"AQID"};
@@ -348,6 +362,7 @@ namespace
         AWL_ASSERT(resource_list[0].as_object().at("uri") == "test://binary");
         AWL_ASSERT(resource_list[1].as_object().at("uri") == "test://text");
         AWL_ASSERT(resource_list[1].as_object().at("mimeType") == "text/plain");
+
         for (const bool binary : {false, true})
         {
             const std::string uri = binary ? "test://binary" : "test://text";
@@ -425,6 +440,7 @@ namespace
     asio::awaitable<void> asyncErrors(Peer& peer)
     {
         co_await asyncCheckError(peer, "{bad json", -32700, nullptr);
+
         for (const std::string body : {"[]", "null", "42",
             R"({"jsonrpc":"1.0","method":"tools/list","id":1})",
             R"({"jsonrpc":"2.0","method":5,"id":1})",
@@ -470,7 +486,11 @@ namespace
             const auto& result = call.at("result").as_object();
             AWL_ASSERT(result.at("isError") == true);
             const std::string text(result.at("content").as_array()[0].as_object().at("text").as_string());
-            if (field == "empty_error") AWL_ASSERT(text == "Tool 'fail' failed without a diagnostic message.");
+
+            if (field == "empty_error")
+            {
+                AWL_ASSERT(text == "Tool 'fail' failed without a diagnostic message.");
+            }
             else
             {
                 const std::string reason = field == "standard_error" ? "Invalid order list_id 123" :
@@ -607,6 +627,7 @@ namespace
         worker.join();
         AWL_ASSERT_FALSE(timed_out);
         AWL_ASSERT(completed);
+
         if (failure)
         {
             std::rethrow_exception(failure);
@@ -618,6 +639,7 @@ AWL_TEST(ServerRegistration)
 {
     Fixture fixture(context.logger);
     fixture.registerHandlers();
+
     for (const std::string method : {"test/echo", "", "initialize", "notifications/initialized", "ping",
         "server/discover", "tools/list", "tools/call", "resources/list", "resources/read", "rpc.reserved"})
     {

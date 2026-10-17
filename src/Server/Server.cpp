@@ -35,6 +35,7 @@ namespace mcp
         std::string requiredString(const json::object& params, const std::string_view key)
         {
             const json::value* value = params.if_contains(key);
+
             if (!value || !value->is_string() || value->as_string().empty())
             {
                 throw RpcError(-32602, "Invalid params");
@@ -46,6 +47,7 @@ namespace mcp
         json::object makeError(const RpcError& error)
         {
             json::object result{{"code", error.code()}, {"message", error.what()}};
+
             if (error.data())
             {
                 result["data"] = *error.data();
@@ -58,6 +60,7 @@ namespace mcp
         {
             json::object result{{"name", definition.name}, {"description", definition.description},
                 {"inputSchema", definition.inputSchema}};
+
             if (definition.outputSchema)
             {
                 result["outputSchema"] = *definition.outputSchema;
@@ -70,6 +73,7 @@ namespace mcp
         {
             json::object result{{"uri", definition.uri}, {"name", definition.name},
                 {"description", definition.description}};
+
             if (!definition.mimeType.empty())
             {
                 result["mimeType"] = definition.mimeType;
@@ -81,6 +85,7 @@ namespace mcp
         json::object serializeContents(const ResourceContents& contents)
         {
             json::object result{{"uri", contents.uri}};
+
             if (!contents.mimeType.empty())
             {
                 result["mimeType"] = contents.mimeType;
@@ -127,6 +132,7 @@ namespace mcp
     void Server::addHandler(std::string method, std::unique_ptr<IHandler> handler)
     {
         checkSetup();
+
         if (method.empty() || method.starts_with("rpc.") || isBuiltin(method) || _handlers.contains(method))
         {
             throw awl::GeneralException("Empty, reserved or duplicate handler method.");
@@ -140,12 +146,14 @@ namespace mcp
     {
         checkSetup();
         ToolDefinition definition = tool_handler->definition();
+
         if (definition.name.empty() || _tools.contains(definition.name))
         {
             throw awl::GeneralException("Empty or duplicate tool name.");
         }
 
         const json::value* input_type = definition.inputSchema.if_contains("type");
+
         if (!input_type || *input_type != "object")
         {
             throw awl::GeneralException("Tool input schema must describe an object.");
@@ -154,6 +162,7 @@ namespace mcp
         if (definition.outputSchema)
         {
             const json::value* output_type = definition.outputSchema->if_contains("type");
+
             if (!output_type || *output_type != "object")
             {
                 throw awl::GeneralException("Tool output schema must describe an object.");
@@ -169,6 +178,7 @@ namespace mcp
     {
         checkSetup();
         ResourceDefinition definition = resource_handler->definition();
+
         if (definition.uri.empty() || definition.name.empty() || _resources.contains(definition.uri))
         {
             throw awl::GeneralException("Empty resource URI/name or duplicate URI.");
@@ -198,6 +208,7 @@ namespace mcp
                 asio::co_spawn(_executor, asyncDispatch(), asio::deferred)
             ).async_wait(asio::experimental::wait_for_one_error(), asio::use_awaitable);
             const std::array errors{transport_error, dispatch_error};
+
             for (const auto index : order)
             {
                 if (errors[index])
@@ -280,6 +291,7 @@ namespace mcp
         const auto complete = [&jobs](const Completion& completion)
         {
             jobs.erase(completion.id);
+
             if (completion.error && !completion.cancelled)
             {
                 std::rethrow_exception(completion.error);
@@ -290,10 +302,9 @@ namespace mcp
             for (;;)
             {
                 while (completions->try_receive([&](const boost::system::error_code, Completion completion)
+                                                { complete(completion); }))
                 {
-                    complete(completion);
-                }))
-                {}
+                }
 
                 if (jobs.size() >= _options.maxConcurrentRequests)
                 {
@@ -304,6 +315,7 @@ namespace mcp
                 boost::system::error_code error;
                 IncomingMessage message = co_await _inputChannel->async_receive(
                     asio::redirect_error(asio::use_awaitable, error));
+
                 if (error == asio::experimental::error::channel_closed)
                 {
                     break;
@@ -359,6 +371,7 @@ namespace mcp
             }
 
             co_await asio::this_coro::throw_if_cancelled(false);
+
             while (!jobs.empty())
             {
                 const auto completion = co_await completions->async_receive(asio::use_awaitable);
@@ -379,6 +392,7 @@ namespace mcp
         {
             boost::system::error_code parse_error;
             json::value document = json::parse(message.body, parse_error);
+
             if (parse_error)
             {
                 throw RpcError(-32700, "Parse error");
@@ -393,6 +407,7 @@ namespace mcp
             const json::value* version = request.if_contains("jsonrpc");
             const json::value* method = request.if_contains("method");
             const json::value* id = request.if_contains("id");
+
             if (!version || *version != "2.0" || !method || !method->is_string()
                 || (id && !id->is_string() && !id->is_int64() && !id->is_uint64()))
             {
@@ -400,6 +415,7 @@ namespace mcp
             }
 
             notification = id == nullptr;
+
             if (id)
             {
                 request_id = *id;
@@ -409,6 +425,7 @@ namespace mcp
                 std::string_view(method->as_string()), message.routeId, request_id);
 
             json::object params;
+
             if (const json::value* supplied_params = request.if_contains("params"))
             {
                 if (!supplied_params->is_object())
@@ -420,6 +437,7 @@ namespace mcp
             }
 
             json::object meta;
+
             if (const json::value* supplied_meta = params.if_contains("_meta"))
             {
                 if (!supplied_meta->is_object())
@@ -431,12 +449,14 @@ namespace mcp
             }
 
             const auto* protocol = meta.if_contains("io.modelcontextprotocol/protocolVersion");
+
             if (message.requireProtocolMetadata && (!protocol || !protocol->is_string()))
             {
                 throw RpcError(-32602, "Protocol version metadata is required");
             }
 
             std::string protocol_version = message.protocolVersion;
+
             if (protocol)
             {
                 if (!protocol->is_string())
@@ -467,6 +487,7 @@ namespace mcp
             if (message.requireProtocolMetadata)
             {
                 const auto* capabilities = meta.if_contains("io.modelcontextprotocol/clientCapabilities");
+
                 if (!capabilities || !capabilities->is_object())
                 {
                     throw RpcError(-32602, "Client capabilities metadata must be an object");
@@ -517,6 +538,7 @@ namespace mcp
         }
 
         OutgoingMessage outgoing{message.routeId, MessageKind::Accepted, {}, message.stopToken};
+
         if (!notification)
         {
             response["id"] = std::move(request_id);
@@ -532,6 +554,7 @@ namespace mcp
         const std::string method, json::object params, RequestContext context)
     {
         const bool legacy = context.protocolVersion() == protocol::legacyVersion;
+
         if (method == "initialize")
         {
             if (!context.requestId())
@@ -543,6 +566,7 @@ namespace mcp
             _logger->debug("Initializing legacy client, requested protocol: {}", requested);
             const auto* capabilities = params.if_contains("capabilities");
             const auto* client_info = params.if_contains("clientInfo");
+
             if (!capabilities || !capabilities->is_object() || !client_info || !client_info->is_object())
             {
                 throw RpcError(-32602, "Initialize requires capabilities and clientInfo objects");
@@ -590,6 +614,7 @@ namespace mcp
             }
 
             json::array items;
+
             if (method == "tools/list")
             {
                 for (const auto& [name, tool] : _tools)
@@ -598,6 +623,7 @@ namespace mcp
                 }
 
                 json::object result{{"tools", std::move(items)}};
+
                 if (!legacy)
                 {
                     result["resultType"] = "complete";
@@ -613,6 +639,7 @@ namespace mcp
                 }
 
                 json::object result{{"resources", std::move(items)}};
+
                 if (!legacy)
                 {
                     result["resultType"] = "complete";
@@ -626,12 +653,14 @@ namespace mcp
         {
             const std::string name = requiredString(params, "name");
             const auto found = _tools.find(name);
+
             if (found == _tools.end())
             {
                 throw RpcError(-32602, "Unknown tool");
             }
 
             json::object arguments;
+
             if (const json::value* supplied = params.if_contains("arguments"))
             {
                 if (!supplied->is_object())
@@ -686,10 +715,12 @@ namespace mcp
             }
 
             json::object serialized{{"content", std::move(result.content)}, {"isError", result.isError}};
+
             if (!legacy)
             {
                 serialized["resultType"] = "complete";
             }
+
             if (result.structuredContent)
             {
                 serialized["structuredContent"] = std::move(*result.structuredContent);
@@ -702,6 +733,7 @@ namespace mcp
         {
             const std::string uri = requiredString(params, "uri");
             const auto found = _resources.find(uri);
+
             if (found == _resources.end())
             {
                 throw RpcError(-32602, "Resource not found", json::object{{"uri", uri}});
@@ -710,12 +742,14 @@ namespace mcp
             _logger->debug("Reading resource: {}", uri);
             const std::vector<ResourceContents> contents = co_await found->second.handler->asyncRead(std::move(context));
             json::array items;
+
             for (const ResourceContents& item : contents)
             {
                 items.push_back(serializeContents(item));
             }
 
             json::object result{{"contents", std::move(items)}};
+
             if (!legacy)
             {
                 result["resultType"] = "complete";
@@ -725,6 +759,7 @@ namespace mcp
         }
 
         const auto found = _handlers.find(method);
+
         if (found == _handlers.end())
         {
             throw RpcError(-32601, "Method not found");
