@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common/Channel.h"
+#include "BoostExtras/Channel.h"
 
 #include <boost/system/error_code.hpp>
 #include <cstdint>
@@ -24,11 +24,11 @@ namespace mcp
         RouteId routeId;
         MessageKind kind;
         std::string body;
-        std::stop_token stopToken;
+        std::stop_token stopToken{};
     };
 
     // Directions are named from the application's handler perspective.
-    using OutputChannel = Channel<void(boost::system::error_code, OutgoingMessage)>;
+    using OutputChannel = awl::Channel<void(boost::system::error_code, OutgoingMessage)>;
 
     struct IncomingMessage
     {
@@ -36,11 +36,11 @@ namespace mcp
         std::string body;
         // Required, non-null. Route IDs are local to this output channel.
         std::shared_ptr<OutputChannel> outputChannel;
-        std::stop_token stopToken;
+        std::stop_token stopToken{};
         bool requireProtocolMetadata = false;
         // HTTP header or negotiated stdio version; empty for generic test inputs.
-        std::string protocolVersion;
+        std::string protocolVersion{};
     };
 
-    using InputChannel = Channel<void(boost::system::error_code, IncomingMessage)>;
+    using InputChannel = awl::Channel<void(boost::system::error_code, IncomingMessage)>;
 }

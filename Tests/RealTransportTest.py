@@ -207,7 +207,8 @@ def stdio_errors():
         with Host(max_bytes=128) as host:
             host.process.stdin.write(data)
             host.process.stdin.close()
-            host.wait(expected=1)
+            # AWL reports the original transport exception as a runtime error.
+            host.wait(expected=2)
 
 
 def stdio_request_cancel():
@@ -470,6 +471,8 @@ def legacy_stdio():
         result = host.receive()["result"]
         check_echo_result(result)
         assert "resultType" not in result
+        host.send(legacy_request("resources/templates/list"))
+        assert host.receive()["result"] == {"resourceTemplates": []}
         host.process.stdin.close()
         host.wait()
 
@@ -500,6 +503,10 @@ def legacy_http():
         check_echo_result(reply["result"])
         assert "resultType" not in reply["result"]
         assert host.http_json(legacy_request("ping"), overrides=legacy_headers)[1]["result"] == {}
+        status, reply = host.http_json(legacy_request("resources/templates/list"), overrides=legacy_headers)
+        assert status == 200 and reply["result"] == {"resourceTemplates": []}
+        status, reply = host.http_json(rpc("resources/templates/list"))
+        assert status == 200 and reply["result"] == {"resourceTemplates": [], "resultType": "complete"}
         # Initialization must not globally relax validation for other HTTP peers.
         assert host.http_json(legacy_request("tools/list"), overrides={"MCP-Protocol-Version": ""})[0] == 400
         assert host.http_json(rpc("tools/list"), overrides=legacy_headers)[0] == 400

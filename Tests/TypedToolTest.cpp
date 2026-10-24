@@ -11,8 +11,10 @@
 #include <boost/asio/experimental/awaitable_operators.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/strand.hpp>
+#include <boost/asio/use_future.hpp>
 #include <chrono>
 #include <exception>
+#include <format>
 #include <limits>
 #include <memory>
 #include <thread>
@@ -31,6 +33,8 @@ namespace
     using namespace asio::experimental::awaitable_operators;
     using namespace mcp;
     using namespace mcp::testing;
+    using awl::makeJsonSchema;
+    using awl::validateJson;
 
     struct SumInput
     {
@@ -454,7 +458,9 @@ namespace
             const json::object result = co_await asyncCall(peer, 7, name, {});
             AWL_ASSERT(result.at("isError") == true);
             AWL_ASSERT_FALSE(result.contains("structuredContent"));
-            AWL_ASSERT(result.at("content").as_array()[0].as_object().at("text") == "Tool execution failed");
+            const std::string text(result.at("content").as_array()[0].as_object().at("text").as_string());
+            AWL_ASSERT(text.starts_with(std::format("Tool '{}' failed: ", name)));
+            AWL_ASSERT(text.find(name == "fail" ? "Private typed tool details" : "$.value") != std::string::npos);
         }
 
         const json::object recovery = co_await asyncCall(peer, 7, "sum", json::object{{"a", 2}, {"b", 2}});
@@ -580,6 +586,23 @@ AWL_TEST(TypedToolValidation)
     assertInvalid<double>(std::numeric_limits<double>::quiet_NaN());
     assertInvalid<std::vector<int>>(json::array{1, "2"});
     assertInvalid<Record>(nullptr);
+}
+
+AWL_TEST(TypedToolCustomOutputSchema)
+{
+    auto output_schema = makeJsonSchema<SumOutput>();
+    output_schema.at("properties").as_object().at("sum").as_object()["description"] = "The computed sum";
+    SumTool tool("sum", "Sum with refined output metadata", makeJsonSchema<SumInput>(), output_schema,
+        context.logger->createLogger("SumTool"));
+    AWL_ASSERT(*tool.definition().outputSchema == output_schema);
+    asio::io_context io_context;
+    std::shared_ptr<OutputChannel> output = std::make_shared<OutputChannel>(io_context.get_executor(), 1);
+    auto result = asio::co_spawn(io_context,
+        tool.asyncCall({{"a", 4}, {"b", 5}}, RequestContext(0, 1, output)), asio::use_future);
+    io_context.run();
+    const auto value = result.get();
+    AWL_ASSERT(!value.isError && value.structuredContent->at("sum") == 9);
+    AWL_ASSERT(json::parse(value.content[0].at("text").as_string()) == *value.structuredContent);
 }
 
 AWL_TEST(TypedToolFullDuplex)

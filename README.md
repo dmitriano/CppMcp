@@ -3,9 +3,12 @@
 C++23 MCP framework library using AWL, Boost.Asio and Boost.Beast, without Qt.
 The static library `CppMcp` provides transport orchestration and a JSON-RPC dispatcher
 with handlers, tools and resources, real stdio and Streamable HTTP transports.
+`resources/templates/list` returns an empty `resourceTemplates` array until
+resource template registration is implemented.
 
-AWL is a submodule in `lib/Awl`, pinned to the same revision as the reference
-`tradeclient` project. Boost and OpenSSL are discovered by AWL's CMake scripts,
+AWL is a submodule in `lib/Awl`; an external shared checkout can be selected with
+`AWL_ROOT_DIR`. It must provide AWL's library-target API and the duration/JSON
+helpers used by CppMcp. Boost and OpenSSL are discovered by AWL's CMake scripts,
 with the static runtime and static Boost libraries used by `tradeclient`.
 
 Reference development guidelines: [AGENTS.md](../tradeclient/AGENTS.md) in the `tradeclient` project.
@@ -34,7 +37,8 @@ $cmake = "C:/dev/tools/cmake-4.4.3-windows-x86_64/bin/cmake.exe"
 
 This builds `CppMcp.lib` on Windows. The library has no `main()`; the application
 provides its own entry point. AWL and Boost.JSON implementations are compiled
-once into the library. The test executable has a separate AWL test entry point.
+once into separate AWL libraries shared by consumers in the same build tree;
+CppMcp links them instead of embedding their objects. Tests link `AWL::TestMain`.
 Use `-DBUILD_TESTING=OFF` to configure a library-only build.
 
 ## Using the library
@@ -67,9 +71,15 @@ argument to the configure command:
 -DAWL_ROOT_DIR=C:/dev/repos/tradeclient/lib/Awl
 ```
 
-The path must contain `CMake/AwlConfig.cmake` and `CMake/AwlLink.cmake`.
+The path must contain `CMake/AwlConfig.cmake` and `CMake/AwlTargets.cmake`.
 An external checkout does not require initializing the bundled AWL submodule.
 Use `-DAWL_ROOT_DIR=...` again to change the path in an existing build directory.
+
+An existing AWL target set is reused after checking that the checkout and options
+match. Otherwise CppMcp creates the targets through `awl_add_libraries()`. Use an
+AWL checkout with this library-target API; an older bundled revision must be
+updated or replaced with `AWL_ROOT_DIR`. This does not require an installed AWL
+package or rebuilding AWL implementations inside the CppMcp archive.
 
 ## Transport contracts and tests
 
@@ -78,7 +88,8 @@ Transports are ordinary objects; there is no static factory registration.
 The application handler reads a shared `InputChannel` and sends replies to the
 originating transport's `OutputChannel`, carried by each incoming message.
 `routeId` identifies a destination within that output channel, independently of
-the JSON-RPC ID. All queues use `mcp::Channel`, an Asio `concurrent_channel` alias.
+the JSON-RPC ID. All queues use `awl::Channel` from `BoostExtras/Channel.h`, an Asio
+`concurrent_channel` alias shared through AWL.
 
 Call `asyncRun()` once after adding transports. The server uses a caller-supplied
 strand executor and runs all transports concurrently. Cancellation or a child
@@ -251,7 +262,7 @@ multimaps can only serialize distinct keys, with duplicate output keys rejected.
 
 A custom `awl::JsonSerializer<T>` is accepted too: by default its schema is `{}`
 and validation calls its `fromJson` on a temporary value. Specialize
-`mcp::JsonSchemaTraits<T>` with a static `schema()` returning a JSON object to
+`awl::JsonSchemaTraits<T>` with a static `schema()` returning a JSON object to
 provide its actual shape. An optional static `validate(const boost::json::value&)`
 can replace deserialization-based validation, including for types without a default
 constructor; report errors with `awl::JsonException`. Arbitrary custom schemas are
@@ -261,9 +272,12 @@ Every non-optional field is required, even if its C++ declaration has a default.
 Optional fields may be absent or `null`; AWL serializes an empty optional as `null`.
 Unknown fields are rejected in reflected objects; map keys and opaque JSON
 objects are unrestricted. Transparent wrappers retain the underlying type rules.
-`makeJsonSchema<T>()` and
-`validateJson<T>()` in `Common/JsonSchema.h` share these type rules. This validates
+`awl::makeJsonSchema<T>()` and `awl::validateJson<T>()` in AWL's
+`BoostExtras/Json/JsonSchema.h` share these type rules. This validates
 the supported C++ shapes, not arbitrary user-provided JSON Schema documents.
+TypedTool also accepts an explicitly supplied input schema for describing opaque
+JSON fields. Runtime envelope validation still uses its Input type; the executor
+must validate opaque values against their actual types before performing actions.
 Arithmetic fields must be JSON numbers within the C++ type's range; numeric
 string coercion is rejected. Decimal and duration fields use their string
 serializers for syntax, range and precision checks. Time points check target

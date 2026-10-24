@@ -34,6 +34,8 @@ namespace mcp
         // Setup only, before asyncRun(); handlers are required to be non-null.
         void addHandler(std::string method, std::unique_ptr<IHandler> handler);
 
+        // Execution failures return the tool name and exception message in isError content.
+        // Tool diagnostics must not include credentials or other secrets. Cancellation propagates separately.
         void addTool(std::unique_ptr<ITool> tool_handler);
 
         void addResource(std::unique_ptr<IResource> resource_handler);

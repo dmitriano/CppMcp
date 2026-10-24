@@ -128,7 +128,7 @@ AWL_TEST(JsonDuration)
     }
 
     milliseconds value(7);
-    for (const boost::json::value json : {boost::json::value("1s."), boost::json::value("0.000000001"),
+    for (const boost::json::value& json : {boost::json::value("1s."), boost::json::value("0.000000001"),
         boost::json::value(1500), boost::json::value(true), boost::json::value(nullptr)})
     {
         assertDurationException<awl::JsonException>([&] { awl::fromJson(json, value); });

@@ -1,6 +1,6 @@
-#include "Common/JsonSchema.h"
 #include "Tests/JsonSchemaTestData.h"
 
+#include "BoostExtras/Json/JsonSchema.h"
 #include "BoostExtras/Json/JsonUtil.h"
 #include "Awl/Testing/UnitTest.h"
 
@@ -57,7 +57,7 @@ namespace awl
     class JsonSerializer<NonDefaultNumber> : public NumberSerializer<NonDefaultNumber> {};
 }
 
-namespace mcp
+namespace awl
 {
     template <>
     struct JsonSchemaTraits<CustomNumber>
@@ -85,6 +85,8 @@ namespace
     using namespace mcp;
     using namespace mcp::testing;
     using namespace std::chrono;
+    using awl::makeJsonSchema;
+    using awl::validateJson;
 
     template <class Func>
     void assertJsonError(Func&& function, const std::string_view path = {})
@@ -237,7 +239,7 @@ AWL_TEST(JsonSchemaWrappers)
     WrappedData output;
     json::value wire = json::object{{"counter", std::ldexp(1.0, 63)}, {"link", 42.0}};
     validateJson<WrappedData>(wire);
-    detail::normalizeJsonIntegers<WrappedData>(wire);
+    awl::normalizeJsonIntegers<WrappedData>(wire);
     awl::fromJson(wire, output);
     AWL_ASSERT(output.counter.load() == (std::uint64_t{1} << 63));
     AWL_ASSERT(output.storage == 42);

@@ -1,13 +1,14 @@
 #pragma once
 
-#include "Common/JsonSchema.h"
 #include "Server/ITool.h"
 
+#include "BoostExtras/Json/JsonSchema.h"
 #include "BoostExtras/Json/JsonUtil.h"
 
 #include "Awl/ILogger.h"
 
 #include <concepts>
+#include <format>
 #include <utility>
 
 namespace mcp
@@ -23,7 +24,21 @@ namespace mcp
 
         // Logger is non-null; supply a child logger for this tool at the call site.
         TypedTool(std::string name, std::string description, const std::shared_ptr<awl::ILogger>& logger) :
-            _definition{std::move(name), std::move(description), makeJsonSchema<Input>(), makeJsonSchema<Output>()},
+            TypedTool(std::move(name), std::move(description), awl::makeJsonSchema<Input>(), logger)
+        {}
+
+        // Advertise a refined input schema; runtime validation still uses Input.
+        // The executor must validate any opaque JSON fields described by this schema.
+        TypedTool(std::string name, std::string description, boost::json::object input_schema,
+            const std::shared_ptr<awl::ILogger>& logger) :
+            TypedTool(std::move(name), std::move(description), std::move(input_schema), awl::makeJsonSchema<Output>(), logger)
+        {}
+
+        // Refined schemas describe opaque JSON fields; runtime validation uses Input/Output.
+        // The implementation must ensure opaque values conform to the advertised schemas.
+        TypedTool(std::string name, std::string description, boost::json::object input_schema,
+            boost::json::object output_schema, const std::shared_ptr<awl::ILogger>& logger) :
+            _definition{std::move(name), std::move(description), std::move(input_schema), std::move(output_schema)},
             _logger(logger)
         {}
 
@@ -37,14 +52,14 @@ namespace mcp
             std::optional<std::string> input_error;
             try
             {
-                validateJson<Input>(input_json);
-                detail::normalizeJsonIntegers<Input>(input_json);
+                awl::validateJson<Input>(input_json);
+                awl::normalizeJsonIntegers<Input>(input_json);
                 awl::fromJson(input_json, input);
             }
             catch (const awl::JsonException& error)
             {
                 _logger->warning(_T("Invalid tool arguments: {}"), error.message());
-                input_error = error.what();
+                input_error = std::format("Invalid arguments for tool '{}': {}", _definition.name, error.what());
             }
 
             if (input_error)
@@ -57,7 +72,7 @@ namespace mcp
             // In particular, cancellation must never become an isError response.
             const Output output = co_await asyncExecute(std::move(input), std::move(context));
             boost::json::value output_json = awl::toJson(output);
-            validateJson<Output>(output_json);
+            awl::validateJson<Output>(output_json);
             const std::string text = boost::json::serialize(output_json);
             co_return ToolResult{boost::json::array{boost::json::object{{"type", "text"}, {"text", text}}},
                 std::move(output_json), false};

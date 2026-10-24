@@ -55,7 +55,7 @@ namespace mcp
         HttpOptions _options;
         boost::asio::ip::tcp::acceptor _acceptor;
         std::map<RouteId, std::shared_ptr<Session>> _sessions;
-        Channel<void(boost::system::error_code, bool)> _completed;
+        awl::Channel<void(boost::system::error_code, bool)> _completed;
         RouteId _nextRouteId = 1;
         bool _started = false;
     };
