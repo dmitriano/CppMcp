@@ -20,7 +20,8 @@ namespace
     template <class T>
     struct NumberSerializer
     {
-        void fromJson(const boost::json::value& json, T& output)
+        void fromJson(const boost::json::value& json, T& output,
+            awl::bitmap<awl::JsonSerializationOptions> = {})
         {
             if (!json.is_int64() || json.as_int64() < 0 || json.as_int64() > 100)
             {
