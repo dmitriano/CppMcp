@@ -43,12 +43,12 @@ def headers(value):
 
 
 class Host:
-    def __init__(self, mode="stdio", stop_after=0, max_bytes=1048576, read_output=True, http_port=0, extra_options=()):
+    def __init__(self, mode="stdio", stop_after=None, max_bytes=1048576, read_output=True, http_port=0, extra_options=()):
         self.mode = mode
         arguments = [EXE, "--run=McpServer_Example", "--output=all", "--output_stream=stderr",
                      "--log_level=Warning", f"--transport={mode}", f"--max_message_bytes={max_bytes}",
                      f"--http_port={http_port}", *extra_options]
-        if stop_after:
+        if stop_after is not None:
             arguments.append(f"--timeout={stop_after}")
         self.process = subprocess.Popen(arguments,
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -233,13 +233,13 @@ def stdio_request_cancel():
 
 
 def stdio_cancel_idle():
-    with Host(stop_after=200) as host:
+    with Host(stop_after="0.2") as host:
         host.wait()  # stdin stays open: cancellation must interrupt the read.
         assert host.lines.get(timeout=2) is None
 
 
 def stdio_cancel_write():
-    with Host(stop_after=350, read_output=False) as host:
+    with Host(stop_after="0.35", read_output=False) as host:
         host.send(rpc("test/large"))
         host.wait()  # stdout is deliberately never drained; write must cancel.
 
@@ -276,7 +276,7 @@ def http_timeout():
             connection.close()
         assert host.http_json(rpc("test/stats"))[1]["result"]["cancelled"] == 1
         host.stop_http()
-    with Host("http", stop_after=200) as host:
+    with Host("http", stop_after="0.2") as host:
         connection = http.client.HTTPConnection("127.0.0.1", host.port, timeout=5)
         value = rpc("test/slow")
         connection.request("POST", "/mcp", encoded(value), headers(value))

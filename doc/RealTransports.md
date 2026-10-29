@@ -137,7 +137,9 @@ attributes (`--name=value`, also available through AWL's `--json` provider):
 - `transport`: `stdio` (default), `http` or `both`.
 - `http_port`: 0 (default) selects a free port; specify a fixed port for a stable URL.
 - `max_message_bytes`: maximum stdio frame / HTTP body size, default 1048576.
-- `timeout`: common AWL cancellation timeout in milliseconds; omitted by default.
+- `timeout`: common AWL cancellation duration, for example `--timeout=1m` or
+  `"timeout": "1m"` in JSON; omitted by default. Negative durations disable the
+  deadline; zero requests cancellation immediately.
 
 `--output_stream=stderr` selects the AWL console sink, including startup errors,
 unused-option warnings and `--list`. Its default is `stdout` for ordinary tests.
