@@ -21,7 +21,7 @@ endforeach()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 foreach(test_name HostOptions StdioReal StdioFramingErrors StdioRequestCancel StdioCancelIdle StdioCancelWrite StdioEofCancel
-    ToolReal LegacyStdio LegacyHttp HttpTimeout HttpReal HttpSse HttpErrors HttpDisconnect CombinedTransports)
+    ToolReal LegacyStdio LegacyHttp HttpTimeout HttpAuth HttpReal HttpSse HttpErrors HttpDisconnect CombinedTransports)
     add_test(NAME ${test_name} COMMAND Python3::Interpreter
         "${CMAKE_CURRENT_SOURCE_DIR}/RealTransportTest.py" "$<TARGET_FILE:${PROJECT_NAME}>" ${test_name})
     set_tests_properties(${test_name} PROPERTIES TIMEOUT 15)

@@ -9,6 +9,8 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <chrono>
 #include <map>
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace mcp
@@ -18,6 +20,8 @@ namespace mcp
         boost::asio::ip::tcp::endpoint endpoint{boost::asio::ip::make_address("127.0.0.1"), 0};
         std::string path = "/mcp";
         std::vector<std::string> allowedOrigins;
+        // Null allows anonymous HTTP; an explicitly configured token must be nonempty.
+        std::optional<std::string> bearerToken;
         std::size_t maxBodyBytes = 1024 * 1024;
         std::size_t maxConnections = 64;
         std::size_t maxQueuedResponses = 32;

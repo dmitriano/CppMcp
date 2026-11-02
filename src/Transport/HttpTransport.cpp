@@ -15,6 +15,7 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/json.hpp>
+#include <openssl/crypto.h>
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -50,6 +51,45 @@ namespace mcp
                 const auto lower = [](const unsigned char c) { return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c; };
                 return lower(a) == lower(b);
             });
+        }
+
+        bool isBearerToken(const std::string_view token)
+        {
+            if (token.empty())
+            {
+                return false;
+            }
+
+            bool padding = false;
+
+            for (const unsigned char c : token)
+            {
+                if (c == '=')
+                {
+                    padding = true;
+                }
+                else if (padding || !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '~' || c == '+' || c == '/'))
+                {
+                    return false;
+                }
+            }
+
+            return token.front() != '=';
+        }
+
+        bool isAuthorized(const std::string_view authorization, const std::string_view expected)
+        {
+            const auto separator = authorization.find(' ');
+
+            if (separator == std::string_view::npos || !equalsIgnoreCase(authorization.substr(0, separator), "Bearer"))
+            {
+                return false;
+            }
+
+            const std::string_view token = trim(authorization.substr(separator + 1));
+            return isBearerToken(token) && token.size() == expected.size() &&
+                CRYPTO_memcmp(token.data(), expected.data(), expected.size()) == 0;
         }
 
         bool accepts(const std::string_view field, const std::string_view expected)
@@ -224,6 +264,13 @@ namespace mcp
             http::response<http::string_body> reply(status, version);
             reply.set(http::field::content_type, "application/json");
             reply.keep_alive(false);
+
+            if (status == http::status::unauthorized)
+            {
+                reply.set(http::field::www_authenticate, "Bearer realm=\"mcp\"");
+                reply.set(http::field::cache_control, "no-store");
+            }
+
             if (status == http::status::method_not_allowed)
             {
                 reply.set(http::field::allow, "POST");
@@ -369,6 +416,22 @@ namespace mcp
                 co_return;
             }
 
+            if (settings.bearerToken)
+            {
+                if (request.count(http::field::authorization) > 1)
+                {
+                    co_await reject(http::status::bad_request, -32600, "Duplicate Authorization headers");
+                    co_return;
+                }
+
+                if (!isAuthorized(std::string_view(request[http::field::authorization]), *settings.bearerToken))
+                {
+                    // Authenticate before parsing or routing any JSON-RPC message, including notifications.
+                    co_await reject(http::status::unauthorized, -32001, "HTTP bearer authentication required");
+                    co_return;
+                }
+            }
+
             if (request.method() != http::verb::post)
             {
                 co_await reject(http::status::method_not_allowed, -32600, "Only POST is supported");
@@ -504,6 +567,11 @@ namespace mcp
             || _options.path.empty() || _options.path.front() != '/')
         {
             throw awl::GeneralException("Invalid HTTP transport options.");
+        }
+
+        if (_options.bearerToken && !isBearerToken(*_options.bearerToken))
+        {
+            throw awl::GeneralException("HTTP bearer token must be nonempty and contain only bearer-token characters.");
         }
 
         _acceptor.open(_options.endpoint.protocol());

@@ -514,11 +514,35 @@ def legacy_http():
         host.stop_http()
 
 
+def http_auth():
+    token = "synthetic-library-token_123"
+    with Host("both", extra_options=[f"--http_bearer_token={token}"]) as host:
+        for auth in (None, "Basic Zm9vOmJhcg==", "Bearer wrong", "Bearer " + token + "x"):
+            overrides = {} if auth is None else {"Authorization": auth}
+            status, response_headers, body = host.http(rpc(), overrides=overrides)
+            assert status == 401, (status, body)
+            assert response_headers["WWW-Authenticate"].startswith("Bearer"), response_headers
+            assert token.encode() not in body
+        assert host.http(rpc("test/stop"))[0] == 401
+        status, result = host.http_json(rpc(params={"text": "authorized"}), overrides={"Authorization": "bEaReR " + token})
+        assert status == 200 and result["result"] == {"text": "authorized"}, result
+        host.send(rpc(params={"text": "stdio"}))
+        assert host.receive()["result"] == {"text": "stdio"}
+        assert host.http_json(rpc("test/stop"), overrides={"Authorization": "Bearer " + token})[0] == 200
+        host.wait()
+        assert token not in "".join(host.errors)
+
+    for token in ("", "with spaces", "abc=def"):
+        result = subprocess.run([EXE, "--run=McpServer_Example", "--transport=http", "--output_stream=stderr",
+                                 f"--http_bearer_token={token}"], input=b"", capture_output=True, timeout=5)
+        assert result.returncode != 0 and b"READY " not in result.stderr, result
+
+
 TESTS = {
     "HostOptions": host_options, "StdioReal": stdio_real, "StdioFramingErrors": stdio_errors,
          "StdioRequestCancel": stdio_request_cancel, "StdioCancelIdle": stdio_cancel_idle,
          "StdioCancelWrite": stdio_cancel_write, "StdioEofCancel": stdio_eof_cancel,
-         "HttpTimeout": http_timeout, "HttpReal": http_real, "HttpSse": http_sse,
+         "HttpTimeout": http_timeout, "HttpAuth": http_auth, "HttpReal": http_real, "HttpSse": http_sse,
          "ToolReal": tool_real, "LegacyStdio": legacy_stdio, "LegacyHttp": legacy_http,
          "HttpErrors": http_errors, "HttpDisconnect": http_disconnect, "CombinedTransports": combined}
 if __name__ == "__main__":

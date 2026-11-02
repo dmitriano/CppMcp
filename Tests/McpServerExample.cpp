@@ -16,6 +16,7 @@
 #include <boost/asio/use_awaitable.hpp>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <stop_token>
 
 namespace
@@ -157,6 +158,7 @@ AWL_EXAMPLE(McpServer)
 {
     AWL_ATTRIBUTE(std::string, transport, "stdio");
     AWL_ATTRIBUTE(std::uint32_t, http_port, 0);
+    AWL_ATTRIBUTE(std::optional<std::string>, http_bearer_token, std::nullopt);
     AWL_ATTRIBUTE(std::size_t, max_message_bytes, 1048576);
     if (transport != "stdio" && transport != "http" && transport != "both")
     {
@@ -200,6 +202,7 @@ AWL_EXAMPLE(McpServer)
         std::shared_ptr<mcp::OutputChannel> output = std::make_shared<mcp::OutputChannel>(executor, 1);
         mcp::HttpOptions options;
         options.endpoint.port(static_cast<unsigned short>(http_port));
+        options.bearerToken = http_bearer_token;
         options.maxBodyBytes = max_message_bytes;
         options.allowedOrigins = {"http://allowed.example"};
         options.readTimeout = std::chrono::milliseconds(500);

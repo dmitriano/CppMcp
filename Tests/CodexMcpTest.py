@@ -12,9 +12,10 @@ from RealTransportTest import Host
 
 
 class CodexClient:
-    def __init__(self, home):
+    def __init__(self, home, extra_environment=None):
         # Isolate configuration and state; never modify the user's Codex config.
         environment = dict(os.environ, CODEX_HOME=str(home))
+        environment.update(extra_environment or {})
         self.process = subprocess.Popen([sys.argv[2], "app-server"], env=environment,
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         text=True, encoding="utf-8")
@@ -69,8 +70,8 @@ class CodexClient:
         raise AssertionError("Too many unrelated Codex notifications")
 
 
-def check_codex(home):
-    with CodexClient(home) as client:
+def check_codex(home, extra_environment=None):
+    with CodexClient(home, extra_environment) as client:
         thread = client.request(1, "thread/start", {"cwd": str(home), "ephemeral": True,
                                                    "approvalPolicy": "never", "sandbox": "read-only"})
         thread_id = thread["thread"]["id"]
@@ -98,6 +99,22 @@ with tempfile.TemporaryDirectory(prefix="cppmcp-codex-") as temporary:
             'startup_timeout_sec = 10\ndefault_tools_approval_mode = "auto"\n', encoding="utf-8")
         check_codex(http_home)
         host.stop_http()
+    token = "synthetic-codex-token_123"
+    for source in ("header", "environment"):
+        with Host("http", extra_options=[f"--http_bearer_token={token}"]) as host:
+            auth_home = root / source
+            auth_home.mkdir()
+            auth = ('http_headers = { Authorization = "Bearer ' + token + '" }\n' if source == "header" else
+                    'bearer_token_env_var = "CPPMCP_CODEX_TEST_TOKEN"\n')
+            (auth_home / "config.toml").write_text(
+                '[mcp_servers.cppmcp]\nurl = "http://127.0.0.1:' + str(host.port) + '/mcp"\n' + auth +
+                'startup_timeout_sec = 10\ndefault_tools_approval_mode = "auto"\n', encoding="utf-8")
+            check_codex(auth_home, {"CPPMCP_CODEX_TEST_TOKEN": token} if source == "environment" else None)
+            assert host.http_json({"jsonrpc": "2.0", "id": 99, "method": "test/stop",
+                                   "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                                                        "io.modelcontextprotocol/clientCapabilities": {}}}},
+                                  overrides={"Authorization": "Bearer " + token})[0] == 200
+            host.wait()
     stdio_home = root / "stdio"
     stdio_home.mkdir()
     # JSON quoting also produces a valid TOML basic string for a Windows path.
@@ -105,4 +122,4 @@ with tempfile.TemporaryDirectory(prefix="cppmcp-codex-") as temporary:
         '[mcp_servers.cppmcp]\ncommand = ' + json.dumps(str(Path(sys.argv[1]).resolve())) + '\n'
         'args = ["--run=McpServer_Example", "--output=all", "--output_stream=stderr", "--transport=stdio"]\nstartup_timeout_sec = 10\ndefault_tools_approval_mode = "auto"\n', encoding="utf-8")
     check_codex(stdio_home)
-print("Codex discovered and called echo over HTTP and stdio; no model turn was started.")
+print("Codex discovered and called echo over HTTP (anonymous, static header, environment bearer) and stdio; no model turn was started.")

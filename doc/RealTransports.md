@@ -93,8 +93,17 @@ This implementation uses one POST per TCP connection and sends `Connection: clos
 Each request has its own route, so identical JSON-RPC IDs from different clients
 remain independent. Disconnect, request timeout, queue overflow or shutdown
 cancels that request. `HttpOptions` bounds body size, connections and queued
-responses, and sets read/request deadlines. It provides plain HTTP; TLS and
-application authentication are not supplied. Optional schema-directed
+responses, and sets read/request deadlines. It provides plain HTTP; TLS termination
+belongs to the deployment. `HttpOptions::bearerToken` optionally requires a shared
+bearer token on every HTTP request, including discovery and notifications. Null
+disables authentication; an empty or syntactically invalid configured token fails
+construction. Missing/wrong credentials receive 401 with `WWW-Authenticate: Bearer
+realm="mcp"` and `Cache-Control: no-store`, before JSON parsing or channel delivery.
+Duplicate Authorization headers receive 400. Header scheme matching is case
+insensitive; token matching is exact, using OpenSSL constant-time comparison for
+equal-length values. No credential values are included in errors/logs. This grants
+access to the entire server and is not an OAuth/user/scope implementation. Use HTTPS
+outside loopback. Stdio and Origin checks are independent. Optional schema-directed
 `Mcp-Param-*` header mirroring is not implemented, so do not advertise
 `x-mcp-header` annotations. Legacy GET/DELETE/session/resumable SSE mechanisms
 are not supported by this transport. These behaviors follow the modern
@@ -136,6 +145,9 @@ attributes (`--name=value`, also available through AWL's `--json` provider):
 
 - `transport`: `stdio` (default), `http` or `both`.
 - `http_port`: 0 (default) selects a free port; specify a fixed port for a stable URL.
+- `http_bearer_token`: optional shared HTTP token, null by default. In the library
+  host this is passed directly to HttpOptions; the application host additionally
+  supports an environment-variable source. Do not commit production secrets.
 - `max_message_bytes`: maximum stdio frame / HTTP body size, default 1048576.
 - `timeout`: common AWL cancellation duration, for example `--timeout=1m` or
   `"timeout": "1m"` in JSON. Omission, `--timeout=null`, or `"timeout": null`
@@ -188,3 +200,14 @@ it with `-DCPPMCP_TEST_CODEX=ON`; supply `-DCODEX_EXECUTABLE=<path>` if Codex is
 in PATH. The check uses experimental app-server APIs tested with Codex 0.160.0.
 Windows tests are verified; the POSIX source has not been compiled or executed
 in this Windows environment.
+
+### Static-token client setup
+
+A client sends `Authorization: Bearer <token>` on each HTTP request. In Codex's
+MCP settings use Headers: `Authorization` / `Bearer <token>`, leaving Bearer token
+env var empty. Alternatively set `bearer_token_env_var` to the name of a variable
+available to the Codex process. OAuth login is not required for a configured static
+token. `HttpAuth` exercises real TCP acceptance/rejection; the opt-in
+`CodexMcpInterop` check additionally calls echo with a static Authorization header
+and with an environment-sourced bearer token. It isolates client configuration and
+starts no model turn.
