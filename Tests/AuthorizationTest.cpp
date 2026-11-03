@@ -32,8 +32,8 @@ namespace
                 throw awl::GeneralException("Authorization storage unavailable");
             }
 
-            co_return (permission == "read" && (token == "reader" || token == "writer")) ||
-                (permission == "write" && token == "writer");
+            co_return (permission == "read" && (token == "reader" || token == "full-access")) ||
+                (permission == "full" && token == "full-access");
         }
     };
 
@@ -130,9 +130,9 @@ namespace
                 input, output, requests, responses, logger));
             server.addTool(std::make_unique<ProbeTool>("open", std::vector<std::string>{}, calls));
             server.addTool(std::make_unique<ProbeTool>("read", std::vector<std::string>{"read"}, calls));
-            server.addTool(std::make_unique<ProbeTool>("write", std::vector<std::string>{"write"}, calls));
-            server.addTool(std::make_unique<ProbeTool>("both", std::vector<std::string>{"read", "write"}, calls));
-            server.addHandler("test/stop", std::make_unique<ProbeHandler>(calls), {"write"});
+            server.addTool(std::make_unique<ProbeTool>("full", std::vector<std::string>{"full"}, calls));
+            server.addTool(std::make_unique<ProbeTool>("both", std::vector<std::string>{"read", "full"}, calls));
+            server.addHandler("test/stop", std::make_unique<ProbeHandler>(calls), {"full"});
             server.addResource(std::make_unique<ProbeResource>());
         }
 
@@ -161,25 +161,25 @@ namespace
     {
         std::shared_ptr<mcp::IAuthorizer> authorizer = std::make_shared<Authorizer>();
 
-        for (const std::string token : {"", "wrong", "reader", "writer"})
+        for (const std::string token : {"", "wrong", "reader", "full-access"})
         {
             const mcp::Authorization authorization(authorizer, token);
             const auto listing = co_await asyncRequest(fixture, "tools/list", {}, authorization);
             const auto& tools = listing.at("result").as_object().at("tools").as_array();
-            const auto expected_size = token == "writer" ? 4u : token == "reader" ? 2u : 1u;
+            const auto expected_size = token == "full-access" ? 4u : token == "reader" ? 2u : 1u;
 
             AWL_ASSERT_EQUAL(expected_size, tools.size());
 
-            for (const std::string name : {"open", "read", "write", "both"})
+            for (const std::string name : {"open", "read", "full", "both"})
             {
-                const bool allowed = name == "open" || token == "writer" || (token == "reader" && name == "read");
+                const bool allowed = name == "open" || token == "full-access" || (token == "reader" && name == "read");
                 const auto listed = std::ranges::any_of(tools, [&](const auto& tool) { return std::string(tool.at("name").as_string()) == name; });
                 AWL_ASSERT(listed == allowed);
                 const int previous_calls = fixture.calls;
                 // Client metadata must never grant authorization.
                 const auto result = co_await asyncRequest(fixture, "tools/call", json::object{
                     {"name", name}, {"arguments", json::object{}},
-                    {"_meta", json::object{{"token", "writer"}, {"permissions", json::array{"write"}}}}}, authorization);
+                    {"_meta", json::object{{"token", "full-access"}, {"permissions", json::array{"full"}}}}}, authorization);
                 AWL_ASSERT(result.contains("result") == allowed);
                 AWL_ASSERT_EQUAL(previous_calls + (allowed ? 1 : 0), fixture.calls);
 
@@ -191,27 +191,27 @@ namespace
 
             const int previous_calls = fixture.calls;
             const auto stop = co_await asyncRequest(fixture, "test/stop", {}, authorization);
-            AWL_ASSERT(stop.contains("result") == (token == "writer"));
-            AWL_ASSERT_EQUAL(previous_calls + (token == "writer" ? 1 : 0), fixture.calls);
+            AWL_ASSERT(stop.contains("result") == (token == "full-access"));
+            AWL_ASSERT_EQUAL(previous_calls + (token == "full-access" ? 1 : 0), fixture.calls);
             const auto resources = co_await asyncRequest(fixture, "resources/list", {}, authorization);
-            AWL_ASSERT_EQUAL(token == "reader" || token == "writer" ? 1u : 0u,
+            AWL_ASSERT_EQUAL(token == "reader" || token == "full-access" ? 1u : 0u,
                 resources.at("result").at("resources").as_array().size());
             const auto resource = co_await asyncRequest(fixture, "resources/read",
                 json::object{{"uri", "test://restricted"}}, authorization);
-            AWL_ASSERT(resource.contains("result") == (token == "reader" || token == "writer"));
+            AWL_ASSERT(resource.contains("result") == (token == "reader" || token == "full-access"));
         }
 
         const auto trusted = co_await asyncRequest(fixture, "tools/list", {}, mcp::Authorization::trusted());
         AWL_ASSERT_EQUAL(std::size_t{4}, trusted.at("result").at("tools").as_array().size());
         const auto anonymous = co_await asyncRequest(fixture, "tools/list", {}, {});
         AWL_ASSERT_EQUAL(std::size_t{1}, anonymous.at("result").at("tools").as_array().size());
-        const auto denied = co_await asyncRequest(fixture, "tools/call", json::object{{"name", "write"}}, {});
+        const auto denied = co_await asyncRequest(fixture, "tools/call", json::object{{"name", "full"}}, {});
         AWL_ASSERT(denied.at("error").at("code") == -32003);
 
-        const auto error = co_await asyncRequest(fixture, "tools/call", json::object{{"name", "write"}},
+        const auto error = co_await asyncRequest(fixture, "tools/call", json::object{{"name", "full"}},
             mcp::Authorization(authorizer, "storage-error"));
         AWL_ASSERT(error.at("error").at("code") == -32603);
-        const auto recovered = co_await asyncRequest(fixture, "tools/list", {}, mcp::Authorization(authorizer, "writer"));
+        const auto recovered = co_await asyncRequest(fixture, "tools/list", {}, mcp::Authorization(authorizer, "full-access"));
         AWL_ASSERT_EQUAL(std::size_t{4}, recovered.at("result").at("tools").as_array().size());
     }
 }
