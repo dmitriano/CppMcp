@@ -25,6 +25,17 @@ namespace mcp
     {
         namespace json = boost::json;
 
+        void validatePermissions(const std::vector<std::string>& permissions)
+        {
+            for (const auto& permission : permissions)
+            {
+                if (permission.empty() || permission.find('\0') != std::string::npos)
+                {
+                    throw awl::GeneralException("Required permissions must be nonempty and contain no null characters.");
+                }
+            }
+        }
+
         bool isBuiltin(const std::string_view method)
         {
             return method == "initialize" || method == "notifications/initialized" || method == "ping"
@@ -129,7 +140,8 @@ namespace mcp
         _transportServer.addTransport(std::move(transport));
     }
 
-    void Server::addHandler(std::string method, std::unique_ptr<IHandler> handler)
+    void Server::addHandler(std::string method, std::unique_ptr<IHandler> handler,
+        std::vector<std::string> required_permissions)
     {
         checkSetup();
 
@@ -138,14 +150,16 @@ namespace mcp
             throw awl::GeneralException("Empty, reserved or duplicate handler method.");
         }
 
+        validatePermissions(required_permissions);
         _logger->debug("Registering handler: {}", method);
-        _handlers.emplace(std::move(method), std::move(handler));
+        _handlers.emplace(std::move(method), HandlerEntry{std::move(handler), std::move(required_permissions)});
     }
 
     void Server::addTool(std::unique_ptr<ITool> tool_handler)
     {
         checkSetup();
         ToolDefinition definition = tool_handler->definition();
+        validatePermissions(definition.requiredPermissions);
 
         if (definition.name.empty() || _tools.contains(definition.name))
         {
@@ -178,6 +192,7 @@ namespace mcp
     {
         checkSetup();
         ResourceDefinition definition = resource_handler->definition();
+        validatePermissions(definition.requiredPermissions);
 
         if (definition.uri.empty() || definition.name.empty() || _resources.contains(definition.uri))
         {
@@ -506,7 +521,8 @@ namespace mcp
 
             RequestContext context(message.routeId,
                 notification ? std::nullopt : std::optional<json::value>(request_id),
-                message.outputChannel, std::move(meta), execution_token, message.stopToken, std::move(protocol_version));
+                message.outputChannel, std::move(meta), execution_token, message.stopToken, std::move(protocol_version),
+                std::move(message.authorization));
             response["result"] = co_await asyncInvoke(
                 std::string(method->as_string()), std::move(params), std::move(context));
         }
@@ -632,7 +648,10 @@ namespace mcp
             {
                 for (const auto& [name, tool] : _tools)
                 {
-                    items.push_back(serializeTool(tool.definition));
+                    if (co_await context._authorization.asyncHasPermissions(tool.definition.requiredPermissions))
+                    {
+                        items.push_back(serializeTool(tool.definition));
+                    }
                 }
 
                 json::object result{{"tools", std::move(items)}};
@@ -648,7 +667,10 @@ namespace mcp
             {
                 for (const auto& [uri, resource] : _resources)
                 {
-                    items.push_back(serializeResource(resource.definition));
+                    if (co_await context._authorization.asyncHasPermissions(resource.definition.requiredPermissions))
+                    {
+                        items.push_back(serializeResource(resource.definition));
+                    }
                 }
 
                 json::object result{{"resources", std::move(items)}};
@@ -670,6 +692,11 @@ namespace mcp
             if (found == _tools.end())
             {
                 throw RpcError(-32602, "Unknown tool");
+            }
+
+            if (!co_await context._authorization.asyncHasPermissions(found->second.definition.requiredPermissions))
+            {
+                throw RpcError(-32003, "Permission denied");
             }
 
             json::object arguments;
@@ -752,6 +779,11 @@ namespace mcp
                 throw RpcError(-32602, "Resource not found", json::object{{"uri", uri}});
             }
 
+            if (!co_await context._authorization.asyncHasPermissions(found->second.definition.requiredPermissions))
+            {
+                throw RpcError(-32003, "Permission denied");
+            }
+
             _logger->debug("Reading resource: {}", uri);
             const std::vector<ResourceContents> contents = co_await found->second.handler->asyncRead(std::move(context));
             json::array items;
@@ -778,6 +810,11 @@ namespace mcp
             throw RpcError(-32601, "Method not found");
         }
 
-        co_return co_await found->second->asyncHandle(std::move(params), std::move(context));
+        if (!co_await context._authorization.asyncHasPermissions(found->second.requiredPermissions))
+        {
+            throw RpcError(-32003, "Permission denied");
+        }
+
+        co_return co_await found->second.handler->asyncHandle(std::move(params), std::move(context));
     }
 }

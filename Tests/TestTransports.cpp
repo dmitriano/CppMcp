@@ -64,7 +64,8 @@ namespace mcp::testing
                 validateRoute(request.routeId);
                 _logger->debug("Reading request on route {}", request.routeId);
                 co_await _inputChannel->async_send(boost::system::error_code{},
-                    IncomingMessage{request.routeId, std::move(request.body), _outputChannel}, asio::use_awaitable);
+                    IncomingMessage{request.routeId, std::move(request.body), _outputChannel, {}, false, {},
+                        std::move(request.authorization)}, asio::use_awaitable);
             }
         }
         catch (const boost::system::system_error& error)

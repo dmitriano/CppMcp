@@ -28,6 +28,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(${PROJECT_NAME} STATIC
+    src/Server/IAuthorizer.h
+    src/Server/Authorization.h
+    src/Common/BearerToken.h
     src/Common/Protocol.h
     src/Transport/StdioStreams.h
     src/Transport/StdioTransport.h

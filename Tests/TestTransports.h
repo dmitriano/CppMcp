@@ -14,6 +14,7 @@ namespace mcp::testing
     {
         RouteId routeId;
         std::string body;
+        Authorization authorization{};
     };
 
     using ClientRequestChannel = awl::Channel<void(boost::system::error_code, ClientMessage)>;

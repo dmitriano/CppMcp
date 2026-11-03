@@ -18,10 +18,11 @@ namespace mcp
         RequestContext(const RouteId route_id, std::optional<boost::json::value> request_id,
             const std::shared_ptr<OutputChannel>& output_channel, boost::json::object meta = {},
             std::stop_token stop_token = {}, std::stop_token delivery_token = {},
-            std::string protocol_version = std::string(protocol::modernVersion)) :
+            std::string protocol_version = std::string(protocol::modernVersion),
+            Authorization authorization = {}) :
             _routeId(route_id), _requestId(std::move(request_id)), _outputChannel(output_channel),
             _meta(std::move(meta)), _stopToken(stop_token), _deliveryToken(delivery_token),
-            _protocolVersion(std::move(protocol_version))
+            _protocolVersion(std::move(protocol_version)), _authorization(std::move(authorization))
         {}
 
         RouteId routeId() const { return _routeId; }
@@ -39,6 +40,8 @@ namespace mcp
 
     private:
 
+        friend class Server;
+
         RouteId _routeId;
         std::optional<boost::json::value> _requestId;
         std::shared_ptr<OutputChannel> _outputChannel;
@@ -46,5 +49,6 @@ namespace mcp
         std::stop_token _stopToken;
         std::stop_token _deliveryToken;
         std::string _protocolVersion;
+        Authorization _authorization;
     };
 }

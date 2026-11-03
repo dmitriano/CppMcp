@@ -32,7 +32,8 @@ namespace mcp
         void addTransport(std::unique_ptr<ITransport> transport);
 
         // Setup only, before asyncRun(); handlers are required to be non-null.
-        void addHandler(std::string method, std::unique_ptr<IHandler> handler);
+        void addHandler(std::string method, std::unique_ptr<IHandler> handler,
+            std::vector<std::string> required_permissions = {});
 
         // Execution failures return the tool name and exception message in isError content.
         // Tool diagnostics must not include credentials or other secrets. Cancellation propagates separately.
@@ -48,6 +49,12 @@ namespace mcp
         boost::asio::awaitable<void> asyncRun();
 
     private:
+
+        struct HandlerEntry
+        {
+            std::unique_ptr<IHandler> handler;
+            std::vector<std::string> requiredPermissions;
+        };
 
         struct ToolEntry
         {
@@ -78,7 +85,7 @@ namespace mcp
         std::shared_ptr<InputChannel> _inputChannel;
         const std::shared_ptr<awl::ILogger> _logger;
         TransportServer _transportServer;
-        std::map<std::string, std::unique_ptr<IHandler>, std::less<>> _handlers;
+        std::map<std::string, HandlerEntry, std::less<>> _handlers;
         std::map<std::string, ToolEntry, std::less<>> _tools;
         std::map<std::string, ResourceEntry, std::less<>> _resources;
         ServerOptions _options;

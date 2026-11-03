@@ -201,6 +201,27 @@ in PATH. The check uses experimental app-server APIs tested with Codex 0.160.0.
 Windows tests are verified; the POSIX source has not been compiled or executed
 in this Windows environment.
 
+### Declarative operation permissions
+
+As an alternative to the global `HttpOptions::bearerToken` gate, supply
+`HttpOptions::authorizer`, implementing async
+`IAuthorizer::asyncIsAllowed(std::string token, std::string permission)`.
+The two authentication options are mutually exclusive. Set HTTP
+`requiredPermissions` to require admission permissions on every request before JSON
+parsing (for example `{"read"}`). Missing/invalid tokens receive 401; provider failures
+receive 500. Admission respects timeout, client disconnect and cancellation.
+
+Each ToolDefinition/ResourceDefinition has `requiredPermissions`, and addHandler
+accepts a final requirements vector. Every permission is required. Empty means
+no additional restriction. TypedTool accepts the vector in every constructor
+(default empty) and stores a const definition. Server filters tools/resources lists
+and rejects unauthorized calls with `-32003` (HTTP 403), before running handlers.
+The same request-owned Authorization is used across asynchronous checks; no global
+current-user state or client `_meta` credentials are used. Permission strings have
+no application-specific meaning to CppMcp. Exceptions are errors, never denials.
+Stdio is explicitly trusted; generic in-memory messages default to anonymous.
+Raw bearer tokens have no context accessor and are never serialized.
+
 ### Static-token client setup
 
 A client sends `Authorization: Bearer <token>` on each HTTP request. In Codex's

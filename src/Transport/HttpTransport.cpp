@@ -1,4 +1,5 @@
 #include "Transport/HttpTransport.h"
+#include "Common/BearerToken.h"
 #include "Common/Protocol.h"
 
 #include "Awl/Exception.h"
@@ -53,31 +54,6 @@ namespace mcp
             });
         }
 
-        bool isBearerToken(const std::string_view token)
-        {
-            if (token.empty())
-            {
-                return false;
-            }
-
-            bool padding = false;
-
-            for (const unsigned char c : token)
-            {
-                if (c == '=')
-                {
-                    padding = true;
-                }
-                else if (padding || !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-                    (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '~' || c == '+' || c == '/'))
-                {
-                    return false;
-                }
-            }
-
-            return token.front() != '=';
-        }
-
         bool isAuthorized(const std::string_view authorization, const std::string_view expected)
         {
             const auto separator = authorization.find(' ');
@@ -88,8 +64,7 @@ namespace mcp
             }
 
             const std::string_view token = trim(authorization.substr(separator + 1));
-            return isBearerToken(token) && token.size() == expected.size() &&
-                CRYPTO_memcmp(token.data(), expected.data(), expected.size()) == 0;
+            return isValidBearerToken(token) && bearerTokensEqual(token, expected);
         }
 
         bool accepts(const std::string_view field, const std::string_view expected)
@@ -225,6 +200,11 @@ namespace mcp
                 const auto* code = error->as_object().if_contains("code");
                 if (code && code->is_int64())
                 {
+                    if (code->as_int64() == -32003)
+                    {
+                        return http::status::forbidden;
+                    }
+
                     if (code->as_int64() == -32601)
                     {
                         return http::status::not_found;
@@ -313,7 +293,7 @@ namespace mcp
         asio::awaitable<void> asyncTimeout()
         {
             asio::steady_timer timer(co_await asio::this_coro::executor);
-            timer.expires_after(settings.requestTimeout);
+            timer.expires_at(requestDeadline);
             co_await timer.async_wait(asio::use_awaitable);
         }
 
@@ -358,6 +338,28 @@ namespace mcp
 
                 co_await asio::async_write(stream, http::make_chunk_last(), asio::use_awaitable);
             }
+        }
+
+        enum class AuthorizationResult { Allowed, Denied, Failed };
+
+        asio::awaitable<AuthorizationResult> asyncAuthorize(Authorization authorization)
+        {
+            try
+            {
+                co_return co_await authorization.asyncHasPermissions(settings.requiredPermissions) ?
+                    AuthorizationResult::Allowed : AuthorizationResult::Denied;
+            }
+            catch (const boost::system::system_error& error)
+            {
+                if (error.code() == asio::error::operation_aborted)
+                {
+                    throw;
+                }
+            }
+            catch (...)
+            {}
+
+            co_return AuthorizationResult::Failed;
         }
 
         asio::awaitable<void> asyncRun()
@@ -416,7 +418,9 @@ namespace mcp
                 co_return;
             }
 
-            if (settings.bearerToken)
+            Authorization authorization;
+
+            if (settings.bearerToken || settings.authorizer)
             {
                 if (request.count(http::field::authorization) > 1)
                 {
@@ -424,12 +428,58 @@ namespace mcp
                     co_return;
                 }
 
-                if (!isAuthorized(std::string_view(request[http::field::authorization]), *settings.bearerToken))
+                if (settings.bearerToken && !isAuthorized(std::string_view(request[http::field::authorization]), *settings.bearerToken))
                 {
                     // Authenticate before parsing or routing any JSON-RPC message, including notifications.
                     co_await reject(http::status::unauthorized, -32001, "HTTP bearer authentication required");
                     co_return;
                 }
+            }
+
+            if (settings.bearerToken)
+            {
+                authorization = Authorization::trusted();
+            }
+            else if (settings.authorizer)
+            {
+                std::string token;
+
+                if (request.find(http::field::authorization) != request.end())
+                {
+                    const std::string_view field(request[http::field::authorization]);
+                    const auto separator = field.find(' ');
+                    const auto supplied = separator == std::string_view::npos ? std::string_view{} : trim(field.substr(separator + 1));
+
+                    if (separator == std::string_view::npos || !equalsIgnoreCase(field.substr(0, separator), "Bearer") || !isValidBearerToken(supplied))
+                    {
+                        co_await reject(http::status::unauthorized, -32001, "Invalid bearer authorization header");
+                        co_return;
+                    }
+
+                    token = supplied;
+                }
+
+                authorization = Authorization(settings.authorizer, std::move(token));
+            }
+
+            requestDeadline = std::chrono::steady_clock::now() + settings.requestTimeout;
+            const auto admission = co_await (asyncAuthorize(authorization) || asyncDisconnect() || asyncTimeout());
+
+            if (admission.index() != 0)
+            {
+                co_return;
+            }
+
+            if (std::get<0>(admission) == AuthorizationResult::Failed)
+            {
+                co_await reject(http::status::internal_server_error, -32603, "Authorization service failed");
+                co_return;
+            }
+
+            if (std::get<0>(admission) == AuthorizationResult::Denied)
+            {
+                co_await reject(http::status::unauthorized, -32001, "HTTP authorization required");
+                co_return;
             }
 
             if (request.method() != http::verb::post)
@@ -522,15 +572,15 @@ namespace mcp
             // Include delivery in the race: a disconnected client must cancel
             // even while the application's input channel applies backpressure.
             const std::string effective_protocol = legacy_initialize ? std::string(protocol::legacyVersion) : protocol_header;
-            co_await (asyncExchange(request.body(), version, id != nullptr, require_metadata, effective_protocol)
+            co_await (asyncExchange(request.body(), version, id != nullptr, require_metadata, effective_protocol, std::move(authorization))
                 || asyncDisconnect() || asyncTimeout());
         }
 
         asio::awaitable<void> asyncExchange(std::string body, const unsigned version, const bool is_request,
-            const bool require_metadata, const std::string protocol_version)
+            const bool require_metadata, const std::string protocol_version, Authorization authorization)
         {
             co_await input->async_send(boost::system::error_code{},
-                IncomingMessage{routeId, std::move(body), output, source.get_token(), require_metadata, protocol_version}, asio::use_awaitable);
+                IncomingMessage{routeId, std::move(body), output, source.get_token(), require_metadata, protocol_version, std::move(authorization)}, asio::use_awaitable);
             try
             {
                 co_await asyncResponses(version, is_request);
@@ -553,6 +603,7 @@ namespace mcp
         std::shared_ptr<OutputChannel> output;
         HttpOptions settings;
         awl::Channel<void(boost::system::error_code, OutgoingMessage)> responses;
+        std::chrono::steady_clock::time_point requestDeadline{};
         std::stop_source source;
         asio::cancellation_signal cancellation;
     };
@@ -569,9 +620,14 @@ namespace mcp
             throw awl::GeneralException("Invalid HTTP transport options.");
         }
 
-        if (_options.bearerToken && !isBearerToken(*_options.bearerToken))
+        if (_options.bearerToken && !isValidBearerToken(*_options.bearerToken))
         {
             throw awl::GeneralException("HTTP bearer token must be nonempty and contain only bearer-token characters.");
+        }
+
+        if (_options.bearerToken && _options.authorizer)
+        {
+            throw awl::GeneralException("Configure either a global bearer token or an authorizer, not both.");
         }
 
         _acceptor.open(_options.endpoint.protocol());

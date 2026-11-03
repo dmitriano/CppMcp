@@ -14,6 +14,7 @@ namespace mcp
         std::string name;
         std::string description;
         std::string mimeType;
+        std::vector<std::string> requiredPermissions{};
     };
 
     struct TextResource

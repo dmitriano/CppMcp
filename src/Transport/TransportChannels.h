@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Server/Authorization.h"
+
 #include "BoostExtras/Channel.h"
 
 #include <boost/system/error_code.hpp>
@@ -40,6 +42,7 @@ namespace mcp
         bool requireProtocolMetadata = false;
         // HTTP header or negotiated stdio version; empty for generic test inputs.
         std::string protocolVersion{};
+        Authorization authorization{};
     };
 
     using InputChannel = awl::Channel<void(boost::system::error_code, IncomingMessage)>;

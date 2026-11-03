@@ -23,22 +23,23 @@ namespace mcp
     public:
 
         // Logger is non-null; supply a child logger for this tool at the call site.
-        TypedTool(std::string name, std::string description, const std::shared_ptr<awl::ILogger>& logger) :
-            TypedTool(std::move(name), std::move(description), awl::makeJsonSchema<Input>(), logger)
+        TypedTool(std::string name, std::string description, const std::shared_ptr<awl::ILogger>& logger, std::vector<std::string> required_permissions = {}) :
+            TypedTool(std::move(name), std::move(description), awl::makeJsonSchema<Input>(), logger, std::move(required_permissions))
         {}
 
         // Advertise a refined input schema; runtime validation still uses Input.
         // The executor must validate any opaque JSON fields described by this schema.
         TypedTool(std::string name, std::string description, boost::json::object input_schema,
-            const std::shared_ptr<awl::ILogger>& logger) :
-            TypedTool(std::move(name), std::move(description), std::move(input_schema), awl::makeJsonSchema<Output>(), logger)
+            const std::shared_ptr<awl::ILogger>& logger, std::vector<std::string> required_permissions = {}) :
+            TypedTool(std::move(name), std::move(description), std::move(input_schema), awl::makeJsonSchema<Output>(), logger, std::move(required_permissions))
         {}
 
         // Refined schemas describe opaque JSON fields; runtime validation uses Input/Output.
         // The implementation must ensure opaque values conform to the advertised schemas.
         TypedTool(std::string name, std::string description, boost::json::object input_schema,
-            boost::json::object output_schema, const std::shared_ptr<awl::ILogger>& logger) :
-            _definition{std::move(name), std::move(description), std::move(input_schema), std::move(output_schema)},
+            boost::json::object output_schema, const std::shared_ptr<awl::ILogger>& logger, std::vector<std::string> required_permissions = {}) :
+            _definition{std::move(name), std::move(description), std::move(input_schema), std::move(output_schema),
+                std::move(required_permissions)},
             _logger(logger)
         {}
 
@@ -86,7 +87,7 @@ namespace mcp
 
     private:
 
-        ToolDefinition _definition;
+        const ToolDefinition _definition;
         const std::shared_ptr<awl::ILogger> _logger;
     };
 }

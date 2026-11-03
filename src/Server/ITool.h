@@ -3,6 +3,7 @@
 #include "Server/RequestContext.h"
 
 #include <string>
+#include <vector>
 
 namespace mcp
 {
@@ -12,6 +13,8 @@ namespace mcp
         std::string description;
         boost::json::object inputSchema;
         std::optional<boost::json::object> outputSchema;
+        // Empty means anonymous access. Every listed permission is required.
+        std::vector<std::string> requiredPermissions{};
     };
 
     struct ToolResult

@@ -223,7 +223,7 @@ namespace mcp
         _pending.push_back(source);
         co_await _inputChannel->async_send(boost::system::error_code{},
             IncomingMessage{0, std::move(body), _outputChannel, token, require_metadata,
-                initializing ? std::string(protocol::legacyVersion) : _protocolVersion}, asio::use_awaitable);
+                initializing ? std::string(protocol::legacyVersion) : _protocolVersion, Authorization::trusted()}, asio::use_awaitable);
     }
 
     asio::awaitable<void> StdioTransport::asyncWrite()

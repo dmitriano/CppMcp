@@ -22,6 +22,10 @@ namespace mcp
         std::vector<std::string> allowedOrigins;
         // Null allows anonymous HTTP; an explicitly configured token must be nonempty.
         std::optional<std::string> bearerToken;
+        // Per-operation permissions; mutually exclusive with the global bearerToken.
+        std::shared_ptr<IAuthorizer> authorizer;
+        // Optional admission requirements for every HTTP request, before JSON parsing.
+        std::vector<std::string> requiredPermissions{};
         std::size_t maxBodyBytes = 1024 * 1024;
         std::size_t maxConnections = 64;
         std::size_t maxQueuedResponses = 32;
