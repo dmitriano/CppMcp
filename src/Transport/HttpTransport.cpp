@@ -1,5 +1,6 @@
 #include "Transport/HttpTransport.h"
 #include "Common/BearerToken.h"
+#include "Common/BearerTokenFingerprint.h"
 #include "Common/Protocol.h"
 
 #include "Awl/Exception.h"
@@ -54,17 +55,22 @@ namespace mcp
             });
         }
 
-        bool isAuthorized(const std::string_view authorization, const std::string_view expected)
+        std::optional<std::string_view> parseBearerToken(const std::string_view authorization)
         {
             const auto separator = authorization.find(' ');
 
             if (separator == std::string_view::npos || !equalsIgnoreCase(authorization.substr(0, separator), "Bearer"))
             {
-                return false;
+                return std::nullopt;
             }
 
             const std::string_view token = trim(authorization.substr(separator + 1));
-            return isValidBearerToken(token) && bearerTokensEqual(token, expected);
+            if (!isValidBearerToken(token))
+            {
+                return std::nullopt;
+            }
+
+            return token;
         }
 
         bool accepts(const std::string_view field, const std::string_view expected)
@@ -226,8 +232,9 @@ namespace mcp
     {
         Session(const asio::any_io_executor& executor, asio::ip::tcp::socket socket, const RouteId route_id,
             const std::shared_ptr<InputChannel>& input_channel, const std::shared_ptr<OutputChannel>& output_channel,
-            const HttpOptions& options) : stream(std::move(socket)), routeId(route_id), input(input_channel),
-            output(output_channel), settings(options), responses(executor, options.maxQueuedResponses)
+            const std::shared_ptr<awl::ILogger>& logger, const HttpOptions& options) :
+            stream(std::move(socket)), routeId(route_id), input(input_channel), output(output_channel),
+            _logger(logger), settings(options), responses(executor, options.maxQueuedResponses)
         {}
 
         void cancel()
@@ -418,18 +425,37 @@ namespace mcp
                 co_return;
             }
 
+            const auto authorization_count = request.count(http::field::authorization);
+            const bool has_authorization = authorization_count != 0;
+            const auto supplied_token = authorization_count == 1 ?
+                parseBearerToken(std::string_view(request[http::field::authorization])) : std::nullopt;
+            const auto warn_authorization = [&](const std::string_view reason)
+            {
+                if (supplied_token)
+                {
+                    _logger->warning("HTTP authorization failed on route {}: {}, token_hash={}",
+                        routeId, reason, BearerTokenFingerprint{*supplied_token});
+                }
+                else
+                {
+                    _logger->warning("HTTP authorization failed on route {}: {}, token_hash={}",
+                        routeId, reason, has_authorization ? "unavailable" : "missing");
+                }
+            };
             Authorization authorization;
 
             if (settings.bearerToken || settings.authorizer)
             {
-                if (request.count(http::field::authorization) > 1)
+                if (authorization_count > 1)
                 {
+                    warn_authorization("Duplicate Authorization headers");
                     co_await reject(http::status::bad_request, -32600, "Duplicate Authorization headers");
                     co_return;
                 }
 
-                if (settings.bearerToken && !isAuthorized(std::string_view(request[http::field::authorization]), *settings.bearerToken))
+                if (settings.bearerToken && (!supplied_token || !bearerTokensEqual(*supplied_token, *settings.bearerToken)))
                 {
+                    warn_authorization(has_authorization ? "Bearer token rejected or malformed" : "Missing Authorization header");
                     // Authenticate before parsing or routing any JSON-RPC message, including notifications.
                     co_await reject(http::status::unauthorized, -32001, "HTTP bearer authentication required");
                     co_return;
@@ -444,19 +470,16 @@ namespace mcp
             {
                 std::string token;
 
-                if (request.find(http::field::authorization) != request.end())
+                if (has_authorization)
                 {
-                    const std::string_view field(request[http::field::authorization]);
-                    const auto separator = field.find(' ');
-                    const auto supplied = separator == std::string_view::npos ? std::string_view{} : trim(field.substr(separator + 1));
-
-                    if (separator == std::string_view::npos || !equalsIgnoreCase(field.substr(0, separator), "Bearer") || !isValidBearerToken(supplied))
+                    if (!supplied_token)
                     {
+                        warn_authorization("Invalid bearer Authorization header");
                         co_await reject(http::status::unauthorized, -32001, "Invalid bearer authorization header");
                         co_return;
                     }
 
-                    token = supplied;
+                    token = *supplied_token;
                 }
 
                 authorization = Authorization(settings.authorizer, std::move(token));
@@ -472,12 +495,15 @@ namespace mcp
 
             if (std::get<0>(admission) == AuthorizationResult::Failed)
             {
+                warn_authorization("Authorization service failed");
                 co_await reject(http::status::internal_server_error, -32603, "Authorization service failed");
                 co_return;
             }
 
             if (std::get<0>(admission) == AuthorizationResult::Denied)
             {
+                warn_authorization(has_authorization ?
+                    "Bearer token rejected or required permissions not granted" : "Missing Authorization header");
                 co_await reject(http::status::unauthorized, -32001, "HTTP authorization required");
                 co_return;
             }
@@ -601,6 +627,7 @@ namespace mcp
         RouteId routeId;
         std::shared_ptr<InputChannel> input;
         std::shared_ptr<OutputChannel> output;
+        const std::shared_ptr<awl::ILogger> _logger;
         HttpOptions settings;
         awl::Channel<void(boost::system::error_code, OutgoingMessage)> responses;
         std::chrono::steady_clock::time_point requestDeadline{};
@@ -634,6 +661,11 @@ namespace mcp
         _acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
         _acceptor.bind(_options.endpoint);
         _acceptor.listen();
+
+        if (_options.bearerToken)
+        {
+            _logger->info("HTTP bearer token configured: token_hash={}", BearerTokenFingerprint{*_options.bearerToken});
+        }
     }
 
     asio::ip::tcp::endpoint HttpTransport::localEndpoint() const
@@ -654,7 +686,7 @@ namespace mcp
 
             const RouteId route = _nextRouteId++;
             std::shared_ptr<Session> session = std::make_shared<Session>(_executor, std::move(socket), route,
-                _inputChannel, _outputChannel, _options);
+                _inputChannel, _outputChannel, _logger, _options);
             _sessions.emplace(route, session);
             asio::co_spawn(_executor, session->asyncRun(), asio::bind_cancellation_slot(session->cancellation.slot(),
                 [this, session, route](const std::exception_ptr error)

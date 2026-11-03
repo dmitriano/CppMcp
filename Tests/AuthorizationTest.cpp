@@ -1,3 +1,4 @@
+#include "Common/BearerTokenFingerprint.h"
 #include "Server/Server.h"
 #include "Tests/TestTransports.h"
 #include "Tests/CancellationProbe.h"
@@ -289,4 +290,11 @@ AWL_TEST(AuthorizationCancellation)
     {
         AWL_ASSERT(error.code() == asio::error::operation_aborted);
     }
+}
+
+AWL_TEST(BearerTokenFingerprint)
+{
+    AWL_UNUSED_CONTEXT;
+    AWL_ASSERT_EQUAL(std::string("ba7816bf8f01cfea"), std::format("{}", mcp::BearerTokenFingerprint{"abc"}));
+    AWL_ASSERT_EQUAL(std::string("missing"), std::format("{}", mcp::BearerTokenFingerprint{}));
 }

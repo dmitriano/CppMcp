@@ -31,6 +31,7 @@ add_library(${PROJECT_NAME} STATIC
     src/Server/IAuthorizer.h
     src/Server/Authorization.h
     src/Common/BearerToken.h
+    src/Common/BearerTokenFingerprint.h
     src/Common/Protocol.h
     src/Transport/StdioStreams.h
     src/Transport/StdioTransport.h

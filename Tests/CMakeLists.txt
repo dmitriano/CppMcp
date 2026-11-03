@@ -7,7 +7,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE CppMcp::CppMcp AWL::TestMain)
 awl_apply_compiler_options(${PROJECT_NAME})
 
 foreach(test_name TransportFullDuplex TransportCancelIdle TransportCancelBlockedSend
-    AuthorizationCancellation ServerPermissions ServerRegistration ServerFullDuplex ServerErrors ServerCancelHandler ServerCancelTool
+    BearerTokenFingerprint AuthorizationCancellation ServerPermissions ServerRegistration ServerFullDuplex ServerErrors ServerCancelHandler ServerCancelTool
     ServerCancelOutput ServerOutputFailure ServerEmptyRegistries TypedToolSchema TypedToolValidation
     TypedToolAllTypes TypedToolCustomOutputSchema TypedToolFullDuplex TypedToolInputErrors TypedToolOutputErrors TypedToolCancel
     DurationFormatting DurationParsing DurationErrors JsonDuration

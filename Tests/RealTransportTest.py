@@ -2,6 +2,7 @@
 import base64
 import concurrent.futures
 import http.client
+import hashlib
 import json
 from pathlib import Path
 import queue
@@ -43,10 +44,11 @@ def headers(value):
 
 
 class Host:
-    def __init__(self, mode="stdio", stop_after=None, max_bytes=1048576, read_output=True, http_port=0, extra_options=()):
+    def __init__(self, mode="stdio", stop_after=None, max_bytes=1048576, read_output=True, http_port=0, extra_options=(),
+                 log_level="Warning"):
         self.mode = mode
         arguments = [EXE, "--run=McpServer_Example", "--output=all", "--output_stream=stderr",
-                     "--log_level=Warning", f"--transport={mode}", f"--max_message_bytes={max_bytes}",
+                     f"--log_level={log_level}", f"--transport={mode}", f"--max_message_bytes={max_bytes}",
                      f"--http_port={http_port}", *extra_options]
         if stop_after is not None:
             arguments.append(f"--timeout={stop_after}")
@@ -516,7 +518,7 @@ def legacy_http():
 
 def http_auth():
     token = "synthetic-library-token_123"
-    with Host("both", extra_options=[f"--http_bearer_token={token}"]) as host:
+    with Host("both", extra_options=[f"--http_bearer_token={token}"], log_level="Info") as host:
         for auth in (None, "Basic Zm9vOmJhcg==", "Bearer wrong", "Bearer " + token + "x"):
             overrides = {} if auth is None else {"Authorization": auth}
             status, response_headers, body = host.http(rpc(), overrides=overrides)
@@ -530,7 +532,19 @@ def http_auth():
         assert host.receive()["result"] == {"text": "stdio"}
         assert host.http_json(rpc("test/stop"), overrides={"Authorization": "Bearer " + token})[0] == 200
         host.wait()
-        assert token not in "".join(host.errors)
+        for thread in host.threads:
+            thread.join(timeout=2)
+        assert any("Warning" in line and "Missing Authorization header" in line for line in host.errors)
+        assert any("Warning" in line and "Bearer token rejected or malformed" in line for line in host.errors)
+        log = "".join(host.errors)
+        assert "HTTP bearer token configured: token_hash=" + hashlib.sha256(token.encode()).hexdigest()[:16] in log
+        for rejected in ("wrong", token + "x"):
+            expected = "token_hash=" + hashlib.sha256(rejected.encode()).hexdigest()[:16]
+            assert any("Warning" in line and expected in line for line in host.errors)
+        assert any("Missing Authorization header" in line and "token_hash=missing" in line for line in host.errors)
+        assert any("Bearer token rejected or malformed" in line and "token_hash=unavailable" in line for line in host.errors)
+        assert token not in log
+        assert "Basic Zm9vOmJhcg==" not in log
 
     for token in ("", "with spaces", "abc=def"):
         result = subprocess.run([EXE, "--run=McpServer_Example", "--transport=http", "--output_stream=stderr",

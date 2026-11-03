@@ -222,6 +222,16 @@ no application-specific meaning to CppMcp. Exceptions are errors, never denials.
 Stdio is explicitly trusted; generic in-memory messages default to anonymous.
 Raw bearer tokens have no context accessor and are never serialized.
 
+HTTP authorization failures emit Warning diagnostics with the route ID and a fixed
+reason, including missing/malformed credentials, rejected tokens/requirements, duplicate
+Authorization headers and provider failures. Credentials and raw Authorization values
+are never included in these diagnostics. Recognized Bearer tokens include `token_hash`,
+the first 16 lowercase hex characters of SHA-256 (64 bits), computed only during lazy
+log formatting. Missing tokens use `missing`; malformed/duplicate headers use `unavailable`.
+The legacy global token fingerprint is logged at Info during HTTP transport startup.
+Check with `printf '%s' "$TOKEN" | sha256sum | cut -c1-16`.
+Successful admission emits no failure warning.
+
 ### Static-token client setup
 
 A client sends `Authorization: Bearer <token>` on each HTTP request. In Codex's

@@ -184,8 +184,8 @@ namespace mcp
         }
 
         const std::string name = definition.name;
-        _tools.emplace(name, ToolEntry{std::move(definition), std::move(tool_handler)});
-        _logger->debug("Tool registered: {}", name);
+        const auto entry = _tools.emplace(name, ToolEntry{std::move(definition), std::move(tool_handler)}).first;
+        _logger->debug("Tool registered: {}, required permissions: {}", name, entry->second.definition.requiredPermissions);
     }
 
     void Server::addResource(std::unique_ptr<IResource> resource_handler)
